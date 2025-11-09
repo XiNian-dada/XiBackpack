@@ -22,6 +22,15 @@ zh:
     page_prev_first: "§7第一页"
     page_next_unlimited: "§a下一页 ({page}/{total})"
     page_prev: "§a上一页 ({page}/{total})"
+    backup_created: "§a背包备份创建成功! 备份ID: {id}"
+    backup_create_failed: "§c背包备份创建失败!"
+    backup_restored: "§a背包已从备份恢复: {id}"
+    backup_not_found: "§c未找到指定的备份数据!"
+    backup_invalid_id: "§c无效的备份ID格式!"
+    backup_no_permission: "§c您没有权限创建或恢复背包备份!"
+    backup_help_title: "§e======= §6背包备份命令 §e======="
+    backup_help_create: "§a/xibackpack backup create §7- §f创建背包备份"
+    backup_help_restore: "§a/xibackpack backup restore <ID> §7- §f恢复指定备份"
     
   database:
     init_success: "数据库连接池已初始化"
@@ -56,6 +65,15 @@ en:
     page_prev_first: "§7First page"
     page_next_unlimited: "§aNext page ({page}/{total})"
     page_prev: "§aPrevious page ({page}/{total})"
+    backup_created: "§aBackpack backup created successfully! Backup ID: {id}"
+    backup_create_failed: "§cFailed to create backpack backup!"
+    backup_restored: "§aBackpack restored from backup: {id}"
+    backup_not_found: "§cSpecified backup data not found!"
+    backup_invalid_id: "§cInvalid backup ID format!"
+    backup_no_permission: "§cYou don't have permission to create or restore backpack backups!"
+    backup_help_title: "§e======= §6Backpack Backup Commands §e======="
+    backup_help_create: "§a/xibackpack backup create §7- §fCreate backpack backup"
+    backup_help_restore: "§a/xibackpack backup restore <ID> §7- §fRestore specified backup"
     
   database:
     init_success: "Database connection pool initialized"

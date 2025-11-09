@@ -160,7 +160,7 @@ public class CommandHandler implements CommandExecutor {
         try {
             // 检查管理权限
             if (!player.hasPermission("xibackpack.admin")) {
-                player.sendMessage("§c您没有权限创建背包备份!");
+                player.sendMessage(plugin.getMessage("backpack.backup_no_permission"));
                 return;
             }
             
@@ -179,9 +179,9 @@ public class CommandHandler implements CommandExecutor {
             );
             
             if (success) {
-                player.sendMessage("§a背包备份创建成功! 备份ID: " + backupId);
+                player.sendMessage(plugin.getMessage("backpack.backup_created", "id", backupId));
             } else {
-                player.sendMessage("§c背包备份创建失败!");
+                player.sendMessage(plugin.getMessage("backpack.backup_create_failed"));
             }
         } catch (Exception e) {
             plugin.getLogger().severe("创建背包备份时出错: " + e.getMessage());
@@ -204,13 +204,13 @@ public class CommandHandler implements CommandExecutor {
         try {
             // 检查管理权限
             if (!player.hasPermission("xibackpack.admin")) {
-                player.sendMessage("§c您没有权限恢复背包备份!");
+                player.sendMessage(plugin.getMessage("backpack.backup_no_permission"));
                 return;
             }
             
             // 验证备份ID格式
             if (!backupId.matches("[a-zA-Z0-9_\\-]+")) {
-                player.sendMessage("§c无效的备份ID格式!");
+                player.sendMessage(plugin.getMessage("backpack.backup_invalid_id"));
                 return;
             }
             
@@ -221,7 +221,7 @@ public class CommandHandler implements CommandExecutor {
             );
             
             if (backupData == null) {
-                player.sendMessage("§c未找到指定的备份数据!");
+                player.sendMessage(plugin.getMessage("backpack.backup_not_found"));
                 return;
             }
             
@@ -242,7 +242,7 @@ public class CommandHandler implements CommandExecutor {
             // 保存背包
             plugin.getBackpackManager().saveBackpack(currentBackpack);
             
-            player.sendMessage("§a背包已从备份恢复: " + backupId);
+            player.sendMessage(plugin.getMessage("backpack.backup_restored", "id", backupId));
         } catch (Exception e) {
             plugin.getLogger().severe("恢复背包备份时出错: " + e.getMessage());
             player.sendMessage("§c恢复背包备份时发生错误，请联系管理员");
@@ -259,9 +259,9 @@ public class CommandHandler implements CommandExecutor {
             return;
         }
         
-        player.sendMessage("§e======= §6背包备份命令 §e=======");
-        player.sendMessage("§a/xibackpack backup create §7- §f创建背包备份");
-        player.sendMessage("§a/xibackpack backup restore <ID> §7- §f恢复指定备份");
+        player.sendMessage(plugin.getMessage("backpack.backup_help_title"));
+        player.sendMessage(plugin.getMessage("backpack.backup_help_create"));
+        player.sendMessage(plugin.getMessage("backpack.backup_help_restore"));
     }
 
     /**
@@ -277,8 +277,8 @@ public class CommandHandler implements CommandExecutor {
             player.sendMessage(plugin.getMessage("command.help_title"));
             player.sendMessage(plugin.getMessage("command.help_open"));
             player.sendMessage(plugin.getMessage("command.help_upgrade"));
-            player.sendMessage("§a/xibackpack backup create §7- §f创建背包备份");
-            player.sendMessage("§a/xibackpack backup restore <ID> §7- §f恢复指定备份");
+            player.sendMessage(plugin.getMessage("backpack.backup_help_create"));
+            player.sendMessage(plugin.getMessage("backpack.backup_help_restore"));
             player.sendMessage(plugin.getMessage("command.help_help"));
             player.sendMessage(plugin.getMessage("command.help_legacy"));
         } catch (Exception e) {
