@@ -1,0 +1,33 @@
+# 数据库配置
+database:
+  type: "mysql" # 或 mongodb, postgresql 等
+  host: "localhost"
+  port: 3306
+  database: "xibackpack"
+  username: ""
+  password: ""
+  # 连接池配置
+  max-pool-size: 10
+  min-idle: 2
+  connection-timeout: 30000
+  idle-timeout: 600000
+  max-lifetime: 1800000
+
+# 背包配置
+backpack:
+  size: 27 # 初始背包大小
+  name: "§e§l云上背包"
+  upgrade-cost: 1000 # 每次升级花费的金币数量
+  # 冷却时间设置（毫秒）
+  cooldown: 1000
+  # 备份设置
+  backup:
+    max-count: 10 # 最大备份数量
+
+# NBT相关配置
+nbt:
+  enabled: true
+  allow-mod-items: true
+
+# 语言设置
+language: "zh" # 支持 "zh" (中文) 或 "en" (英文)

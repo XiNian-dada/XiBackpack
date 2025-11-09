@@ -1,0 +1,70 @@
+# XiBackpack 插件消息配置文件
+# 支持多语言和自定义消息
+
+# 中文消息
+zh:
+  command:
+    player_only: "§c该命令只能由玩家执行!"
+    help_title: "§e======= §6XiBackpack 帮助 §e======="
+    help_open: "§a/xibackpack open §7- §f打开云上背包"
+    help_upgrade: "§a/xibackpack upgrade §7- §f升级背包容量"
+    help_help: "§a/xibackpack help §7- §f显示此帮助信息"
+    help_legacy: "§a/backpack §7- §f打开云上背包 (旧指令)"
+  
+  backpack:
+    upgrade_success: "§a背包升级成功! 当前容量: {size} 格，花费: {cost} 金币"
+    upgrade_insufficient_funds: "§c您的金币不足，升级背包需要 {cost} 金币!"
+    economy_not_enabled: "§c经济系统未启用，无法升级背包!"
+    name: "§e§l云上背包"
+    info_title: "§e背包信息"
+    info_capacity: "§7总容量: {size} 格"
+    info_page: "§7当前页: {page}"
+    page_prev_first: "§7第一页"
+    page_next_unlimited: "§a下一页 ({page}/{total})"
+    page_prev: "§a上一页 ({page}/{total})"
+    
+  database:
+    init_success: "数据库连接池已初始化"
+    init_failed: "数据库连接初始化失败: {error}"
+    table_init_success: "数据库表初始化完成"
+    table_init_failed: "数据库表初始化失败: {error}"
+    save_failed: "保存玩家背包数据失败: {error}"
+    load_failed: "加载玩家背包数据失败: {error}"
+    
+  plugin:
+    enabled: "XiBackpack 插件已启用!"
+    disabled: "XiBackpack 插件已禁用!"
+
+# English messages
+en:
+  command:
+    player_only: "§cThis command can only be executed by players!"
+    help_title: "§e======= §6XiBackpack Help §e======="
+    help_open: "§a/xibackpack open §7- §fOpen cloud backpack"
+    help_upgrade: "§a/xibackpack upgrade §7- §fUpgrade backpack capacity"
+    help_help: "§a/xibackpack help §7- §fShow this help message"
+    help_legacy: "§a/backpack §7- §fOpen cloud backpack (legacy command)"
+  
+  backpack:
+    upgrade_success: "§aBackpack upgraded successfully! Current capacity: {size} slots, cost: {cost} coins"
+    upgrade_insufficient_funds: "§cYou don't have enough coins, upgrading backpack requires {cost} coins!"
+    economy_not_enabled: "§cEconomy system is not enabled, cannot upgrade backpack!"
+    name: "§e§lCloud Backpack"
+    info_title: "§eBackpack Info"
+    info_capacity: "§7Total capacity: {size} slots"
+    info_page: "§7Current page: {page}"
+    page_prev_first: "§7First page"
+    page_next_unlimited: "§aNext page ({page}/{total})"
+    page_prev: "§aPrevious page ({page}/{total})"
+    
+  database:
+    init_success: "Database connection pool initialized"
+    init_failed: "Database connection initialization failed: {error}"
+    table_init_success: "Database tables initialized"
+    table_init_failed: "Database table initialization failed: {error}"
+    save_failed: "Failed to save player backpack data: {error}"
+    load_failed: "Failed to load player backpack data: {error}"
+    
+  plugin:
+    enabled: "XiBackpack plugin enabled!"
+    disabled: "XiBackpack plugin disabled!"

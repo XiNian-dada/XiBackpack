@@ -1,0 +1,25 @@
+name: XiBackpack
+version: '${project.version}'
+main: com.leeinx.xibackpack.XiBackpack
+api-version: '1.16'
+commands:
+  backpack:
+    description: 打开个人背包
+    usage: /backpack
+    aliases: [bp, bag]
+    permission: xibackpack.use
+  xibackpack:
+    description: XiBackpack主命令
+    usage: /xibackpack [open|upgrade|help]
+    aliases: [xbp, cloudpack]
+    permission: xibackpack.use
+permissions:
+  xibackpack.use:
+    description: 允许使用XiBackpack
+    default: true
+  xibackpack.admin:
+    description: 允许使用XiBackpack管理命令
+    default: op
+  xibackpack.bypass.cooldown:
+    description: 允许绕过背包冷却时间
+    default: op
