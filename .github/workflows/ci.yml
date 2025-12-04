@@ -1,0 +1,69 @@
+name: XiBackpack CI/CD Pipeline
+
+on:
+  push:
+    # 仅在 'main' 分支推送时触发 CI/CD 流程
+    branches: [ main ]
+  workflow_dispatch:
+  # 允许手动从 GitHub Actions 页面触发此工作流
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 步骤 1: 设置 Java 环境 (更改为 Java 8)
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          # *** 关键更改：将 Java 版本设置为 '8' ***
+          java-version: '8'
+          distribution: 'temurin'
+          cache: maven
+
+      # 步骤 2: 使用 Maven 构建项目
+      - name: Build with Maven
+        # clean install 会编译代码、运行测试并生成 JAR 文件到 target/ 目录
+        run: mvn clean install -B
+
+      # 步骤 3: 提取项目名称和版本号 (用于命名 Release 和 JAR)
+      - name: Extract Project Info
+        id: info
+        run: |
+          # 从 pom.xml 中获取项目版本号
+          PROJECT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "VERSION=$PROJECT_VERSION" >> $GITHUB_OUTPUT
+          # 从 pom.xml 中获取项目名称 (或使用仓库名)
+          PROJECT_NAME=${{ github.event.repository.name }}
+          echo "NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
+
+      # 步骤 4: 上传 JAR 文件作为构建产物 (CI 部分)
+      - name: Upload JAR Artifact (CI)
+        uses: actions/upload-artifact@v4
+        with:
+          # 上传生成的 JAR 文件 (例如: XiBackpack-1.0.0.jar)
+          name: ${{ steps.info.outputs.NAME }}-v${{ steps.info.outputs.VERSION }}
+          # 匹配 target 目录下以 .jar 结尾的文件
+          path: target/*.jar
+          retention-days: 7
+
+      # 步骤 5: 创建 GitHub Release (CD 部分 - 仅在 main 分支推送时创建)
+      - name: Create GitHub Release (CD)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          # 使用项目版本号作为 Tag (例如: v1.0.0)
+          tag_name: v${{ steps.info.outputs.VERSION }}
+          name: Release v${{ steps.info.outputs.VERSION }}
+          body: |
+            ### XiBackpack 新版本 ${{ steps.info.outputs.VERSION }}
+            - 自动构建和发布。
+            - 详情请查看 commit 历史记录。
+          # 附带编译好的 JAR 文件到 Release
+          files: target/*.jar
+        env:
+          # 必须设置 GITHUB_TOKEN，但 GitHub Actions 会自动处理，无需手动创建
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
