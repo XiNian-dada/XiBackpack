@@ -3,7 +3,7 @@ name: XiBackpack CI/CD Pipeline
 on:
   push:
     # 仅在 'main' 分支推送时触发 CI/CD 流程
-    branches: [ main ]
+    branches: [ master ]
   workflow_dispatch:
   # 允许手动从 GitHub Actions 页面触发此工作流
 
