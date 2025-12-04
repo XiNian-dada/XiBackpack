@@ -52,7 +52,7 @@ jobs:
 
       # 步骤 5: 创建 GitHub Release (CD 部分 - 仅在 main 分支推送时创建)
       - name: Create GitHub Release (CD)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: softprops/action-gh-release@v2
         with:
           # 使用项目版本号作为 Tag (例如: v1.0.0)
