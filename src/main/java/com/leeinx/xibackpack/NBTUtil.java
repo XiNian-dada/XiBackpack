@@ -4,6 +4,7 @@ import de.tr7zw.nbtapi.NBTItem;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
 import org.bukkit.Bukkit;
+import java.util.logging.Level;
 
 public class NBTUtil {
 
@@ -20,7 +21,7 @@ public class NBTUtil {
             // 返回NBT数据的JSON字符串形式
             return nbtItem.toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            XiBackpack.getInstance().getLogger().log(Level.WARNING, "Error getting item NBT data", e);
             return null;
         }
     }
@@ -64,7 +65,7 @@ public class NBTUtil {
             // 使用NBT-API的序列化方法获取可存储的NBT数据
             return nbtItem.getCompound().toString();
         } catch (Exception e) {
-            e.printStackTrace();
+            XiBackpack.getInstance().getLogger().log(Level.WARNING, "Error getting advanced item NBT data", e);
             return null;
         }
     }
@@ -87,7 +88,7 @@ public class NBTUtil {
             
             return nbtItem.getItem();
         } catch (Exception e) {
-            e.printStackTrace();
+            XiBackpack.getInstance().getLogger().log(Level.WARNING, "Error applying advanced NBT data", e);
             return null;
         }
     }
@@ -113,31 +114,7 @@ public class NBTUtil {
             
             return nbtItem.getItem();
         } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
-    /**
-     * 更完善的从NBT数据创建物品的方法
-     * @param nbtData NBT数据字符串
-     * @return 物品栈
-     */
-    public static ItemStack createItemFromNBTAdvanced(String nbtData) {
-        if (nbtData == null || nbtData.isEmpty()) {
-            return null;
-        }
-        
-        try {
-            // 使用NBTItem的静态方法从NBT字符串创建物品
-            // 这个方法需要NBT数据是有效的NBT格式
-            ItemStack item = new ItemStack(Material.STONE); // 默认物品
-            // 实际实现中，需要使用NBT-API提供的方法来解析NBT字符串
-            // 由于API限制，这里使用简化实现
-            
-            return item;
-        } catch (Exception e) {
-            e.printStackTrace();
+            XiBackpack.getInstance().getLogger().log(Level.WARNING, "Error creating item from NBT", e);
             return null;
         }
     }

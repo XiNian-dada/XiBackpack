@@ -12,6 +12,7 @@ import org.bukkit.scheduler.BukkitRunnable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
 
 public class BackpackManager {
     private XiBackpack plugin;
@@ -40,38 +41,24 @@ public class BackpackManager {
             PlayerBackpack backpack = loadBackpackFromDatabase(playerUUID);
             loadedBackpacks.put(playerUUID, backpack);
         }
+        
         return loadedBackpacks.get(playerUUID);
     }
-
+    
     public void openBackpack(Player player) {
+        openBackpackPage(player, 0);
+    }
+    
+    public void openBackpackPage(Player player, int page) {
         if (player == null) {
             plugin.getLogger().warning("尝试为null玩家打开背包");
             return;
         }
         
         try {
-            openBackpackPage(player, 0); // 默认打开第一页
-        } catch (Exception e) {
-            plugin.getLogger().severe("打开玩家背包时出错: " + e.getMessage());
-            player.sendMessage("§c打开背包时发生错误，请联系管理员");
-            e.printStackTrace();
-        }
-    }
-    
-    public void openBackpackPage(Player player, int page) {
-        if (player == null) {
-            plugin.getLogger().warning("尝试为null玩家打开背包页面");
-            return;
-        }
-        
-        if (page < 0) {
-            plugin.getLogger().warning("尝试打开负数页面: " + page);
-            page = 0;
-        }
-        
-        try {
             PlayerBackpack backpack = getBackpack(player);
-            // 保存玩家当前页
+            
+            // 保存玩家当前页面
             playerPages.put(player.getUniqueId(), page);
             
             // 创建并打开背包GUI
@@ -94,9 +81,8 @@ public class BackpackManager {
             
             player.openInventory(inventory);
         } catch (Exception e) {
-            plugin.getLogger().severe("打开背包页面时出错: " + e.getMessage());
+            plugin.getLogger().log(Level.SEVERE, "打开背包页面时出错", e);
             player.sendMessage("§c打开背包页面时发生错误，请联系管理员");
-            e.printStackTrace();
         }
     }
 
@@ -111,8 +97,7 @@ public class BackpackManager {
             // 异步加载背包数据
             return loadBackpackFromDatabaseAsync(playerUUID);
         } catch (Exception e) {
-            plugin.getLogger().severe("加载背包数据时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "加载背包数据时出错", e);
             // 返回默认背包
             return new PlayerBackpack(playerUUID, plugin.getConfig().getInt("backpack.size", 27));
         }
@@ -125,8 +110,7 @@ public class BackpackManager {
             try {
                 return PlayerBackpack.deserialize(backpackData, playerUUID);
             } catch (Exception e) {
-                plugin.getLogger().severe("反序列化背包数据时出错: " + e.getMessage());
-                e.printStackTrace();
+                plugin.getLogger().log(Level.SEVERE, "反序列化背包数据时出错", e);
             }
         }
         // 默认背包大小从配置文件读取
@@ -162,12 +146,12 @@ public class BackpackManager {
             ItemStack prevButton = new ItemStack(Material.ARROW);
             ItemMeta prevMeta = prevButton.getItemMeta();
             if (prevMeta != null) {
-                if (page > 0) {
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev", 
-                        "page", String.valueOf(page),
-                        "total", String.valueOf(totalPages)));
-                } else {
+                if (page <= 0) {
                     prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev_first"));
+                } else {
+                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev", 
+                        "page", String.valueOf(page), 
+                        "total", String.valueOf(totalPages)));
                 }
                 prevButton.setItemMeta(prevMeta);
             }
@@ -177,10 +161,9 @@ public class BackpackManager {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta nextMeta = nextButton.getItemMeta();
             if (nextMeta != null) {
-                // 即使到达当前最大页，也允许继续翻页以访问更多空间
-                nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_unlimited",
-                    "page", String.valueOf(page + 2),
-                    "total", String.valueOf(Math.max(totalPages, page + 2))));
+                nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_unlimited", 
+                    "page", String.valueOf(page + 2), 
+                    "total", String.valueOf(totalPages)));
                 nextButton.setItemMeta(nextMeta);
             }
             inventory.setItem(53, nextButton); // 右下角
@@ -198,8 +181,7 @@ public class BackpackManager {
             }
             inventory.setItem(49, infoButton); // 中下
         } catch (Exception e) {
-            plugin.getLogger().severe("添加控制按钮时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "添加控制按钮时出错", e);
         }
     }
     
@@ -239,35 +221,15 @@ public class BackpackManager {
                             plugin.getLogger().warning("保存玩家 " + backpack.getPlayerUUID() + " 的背包数据失败");
                         }
                     } catch (Exception e) {
-                        plugin.getLogger().severe("异步保存背包数据时出错: " + e.getMessage());
-                        e.printStackTrace();
+                        plugin.getLogger().log(Level.SEVERE, "异步保存背包数据时出错", e);
                     }
                 }
             }.runTaskAsynchronously(plugin);
         } catch (Exception e) {
-            plugin.getLogger().severe("调度异步保存任务时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "调度异步保存任务时出错", e);
         }
     }
 
-    public void saveAllBackpacks() {
-        try {
-            // 保存所有已加载的背包数据
-            for (PlayerBackpack backpack : loadedBackpacks.values()) {
-                saveBackpack(backpack);
-            }
-            plugin.getLogger().info("已调度保存所有背包数据");
-        } catch (Exception e) {
-            plugin.getLogger().severe("保存所有背包数据时出错: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
-
-    /**
-     * 当玩家关闭背包时更新背包内容
-     * @param player 玩家
-     * @param inventory 背包界面
-     */
     public void updateBackpackFromInventory(Player player, Inventory inventory) {
         if (player == null || inventory == null) {
             plugin.getLogger().warning("更新背包时参数为空: player=" + player + ", inventory=" + inventory);
@@ -297,8 +259,7 @@ public class BackpackManager {
             // 保存到数据库
             saveBackpack(backpack);
         } catch (Exception e) {
-            plugin.getLogger().severe("从背包界面更新背包时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "从背包界面更新背包时出错", e);
         }
     }
     
@@ -334,8 +295,7 @@ public class BackpackManager {
                 return true;
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("处理控制按钮点击时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "处理控制按钮点击时出错", e);
         }
         
         return false;
@@ -380,8 +340,7 @@ public class BackpackManager {
                 }
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("检查背包界面时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "检查背包界面时出错", e);
         }
         
         return false;
@@ -398,5 +357,20 @@ public class BackpackManager {
         }
         
         return playerPages.getOrDefault(player.getUniqueId(), 0);
+    }
+    
+    /**
+     * 保存所有已加载的背包
+     */
+    public void saveAllBackpacks() {
+        try {
+            // 保存所有已加载的背包数据
+            for (PlayerBackpack backpack : loadedBackpacks.values()) {
+                saveBackpack(backpack);
+            }
+            plugin.getLogger().info("已调度保存所有背包数据");
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "保存所有背包数据时出错", e);
+        }
     }
 }

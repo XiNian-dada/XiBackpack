@@ -7,6 +7,7 @@ import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.logging.Level;
 
 public class PlayerBackpack {
     private UUID playerUUID;
@@ -122,8 +123,7 @@ public class PlayerBackpack {
             Gson gson = new Gson();
             Type type = new TypeToken<Map<String, Object>>(){}.getType();
             Map<String, Object> backpackData = gson.fromJson(data, type);
-
-            // 如果数据解析失败或不包含size字段，使用默认值
+            
             Object sizeObj = backpackData.get("size");
             int size = 27; // 默认大小
             if (sizeObj instanceof Number) {
@@ -150,14 +150,14 @@ public class PlayerBackpack {
                         }
                     } catch (NumberFormatException e) {
                         // 忽略无效的槽位索引
-                        System.err.println("Invalid slot index in backpack data: " + entry.getKey());
+                        XiBackpack.getInstance().getLogger().log(Level.WARNING, "Invalid slot index in backpack data: " + entry.getKey());
                     }
                 }
             }
 
             return backpack;
         } catch (Exception e) {
-            e.printStackTrace();
+            XiBackpack.getInstance().getLogger().log(Level.SEVERE, "Error deserializing player backpack", e);
             // 解析失败时返回默认背包
             return new PlayerBackpack(playerUUID, 27);
         }

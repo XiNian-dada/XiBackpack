@@ -9,6 +9,8 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import java.util.Map;
+import java.util.UUID;
+import java.util.logging.Level;
 
 public class CommandHandler implements CommandExecutor {
     private XiBackpack plugin;
@@ -92,16 +94,14 @@ public class CommandHandler implements CommandExecutor {
                 }
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("处理命令时出错: " + e.getMessage());
+            plugin.getLogger().log(Level.SEVERE, "处理命令时出错", e);
             sender.sendMessage("§c处理命令时发生错误，请联系管理员");
-            e.printStackTrace();
         }
-
         return false;
     }
-
+    
     /**
-     * 升级玩家背包
+     * 升级背包
      * @param player 玩家
      */
     private void upgradeBackpack(Player player) {
@@ -141,9 +141,8 @@ public class CommandHandler implements CommandExecutor {
                 "size", String.valueOf(newSize), 
                 "cost", String.valueOf(upgradeCost)));
         } catch (Exception e) {
-            plugin.getLogger().severe("升级背包时出错: " + e.getMessage());
+            plugin.getLogger().log(Level.SEVERE, "升级背包时出错", e);
             player.sendMessage("§c升级背包时发生错误，请联系管理员");
-            e.printStackTrace();
         }
     }
 
@@ -153,7 +152,7 @@ public class CommandHandler implements CommandExecutor {
      */
     private void createBackup(Player player) {
         if (player == null) {
-            plugin.getLogger().warning("尝试为null玩家创建备份");
+            plugin.getLogger().warning("尝试为null玩家创建背包备份");
             return;
         }
         
@@ -164,18 +163,20 @@ public class CommandHandler implements CommandExecutor {
                 return;
             }
             
-            // 创建备份逻辑
+            // 获取玩家背包
             PlayerBackpack backpack = plugin.getBackpackManager().getBackpack(player);
-            String backupData = backpack.serialize();
             
-            // 生成备份ID
-            String backupId = "manual_backup_" + System.currentTimeMillis();
+            // 生成备份ID（使用时间戳）
+            String backupId = "backup_" + System.currentTimeMillis();
             
-            // 保存备份到数据库
+            // 序列化背包数据
+            String backpackData = backpack.serialize();
+            
+            // 保存到数据库
             boolean success = plugin.getDatabaseManager().savePlayerBackpackBackup(
                 player.getUniqueId(), 
-                backupData, 
-                backupId
+                backupId, 
+                backpackData
             );
             
             if (success) {
@@ -184,9 +185,8 @@ public class CommandHandler implements CommandExecutor {
                 player.sendMessage(plugin.getMessage("backpack.backup_create_failed"));
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("创建背包备份时出错: " + e.getMessage());
+            plugin.getLogger().log(Level.SEVERE, "创建背包备份时出错", e);
             player.sendMessage("§c创建背包备份时发生错误，请联系管理员");
-            e.printStackTrace();
         }
     }
     
@@ -244,9 +244,8 @@ public class CommandHandler implements CommandExecutor {
             
             player.sendMessage(plugin.getMessage("backpack.backup_restored", "id", backupId));
         } catch (Exception e) {
-            plugin.getLogger().severe("恢复背包备份时出错: " + e.getMessage());
+            plugin.getLogger().log(Level.SEVERE, "恢复背包备份时出错", e);
             player.sendMessage("§c恢复背包备份时发生错误，请联系管理员");
-            e.printStackTrace();
         }
     }
     
@@ -282,8 +281,7 @@ public class CommandHandler implements CommandExecutor {
             player.sendMessage(plugin.getMessage("command.help_help"));
             player.sendMessage(plugin.getMessage("command.help_legacy"));
         } catch (Exception e) {
-            plugin.getLogger().severe("显示帮助信息时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "显示帮助信息时出错", e);
         }
     }
 
@@ -302,8 +300,7 @@ public class CommandHandler implements CommandExecutor {
             economy = rsp.getProvider();
             return economy != null;
         } catch (Exception e) {
-            plugin.getLogger().severe("设置经济系统时出错: " + e.getMessage());
-            e.printStackTrace();
+            plugin.getLogger().log(Level.SEVERE, "设置经济系统时出错", e);
             return false;
         }
     }

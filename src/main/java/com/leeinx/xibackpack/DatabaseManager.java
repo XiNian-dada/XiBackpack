@@ -11,6 +11,7 @@ import java.sql.Statement;
 import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 
 public class DatabaseManager {
     private XiBackpack plugin;
@@ -29,7 +30,7 @@ public class DatabaseManager {
             String host = plugin.getConfig().getString("database.host", "localhost");
             int port = plugin.getConfig().getInt("database.port", 3306);
             String database = plugin.getConfig().getString("database.database", "xibackpack");
-            String username = plugin.getConfig().getString("database.username", "root");
+            String username = plugin.getConfig().getString("database.username", "");
             String password = plugin.getConfig().getString("database.password", "");
 
             // 根据配置设置数据库连接信息
@@ -76,8 +77,7 @@ public class DatabaseManager {
 
             plugin.getLogger().info(plugin.getMessage("database.init_success"));
         } catch (Exception e) {
-            plugin.getLogger().severe(plugin.getMessage("database.init_failed", "error", e.getMessage()));
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.init_failed", "error", e.getMessage()), e);
         }
     }
 
@@ -116,14 +116,13 @@ public class DatabaseManager {
 
             plugin.getLogger().info(plugin.getMessage("database.table_init_success"));
         } catch (SQLException e) {
-            plugin.getLogger().severe(plugin.getMessage("database.table_init_failed", "error", e.getMessage()));
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.table_init_failed", "error", e.getMessage()), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -168,15 +167,14 @@ public class DatabaseManager {
                 return true;
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe(plugin.getMessage("database.save_failed", "error", e.getMessage()));
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.save_failed", "error", e.getMessage()), e);
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -208,14 +206,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe(plugin.getMessage("database.load_failed", "error", e.getMessage()));
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.load_failed", "error", e.getMessage()), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -223,16 +220,15 @@ public class DatabaseManager {
     }
     
     /**
-     * 保存玩家背包备份数据到数据库
+     * 保存玩家背包备份数据
      * @param playerUUID 玩家UUID
-     * @param backpackData 背包数据（JSON格式）
      * @param backupId 备份ID
+     * @param backpackData 背包数据（JSON格式）
      * @return 是否保存成功
      */
-    public boolean savePlayerBackpackBackup(UUID playerUUID, String backpackData, String backupId) {
-        if (playerUUID == null || backpackData == null || backupId == null) {
+    public boolean savePlayerBackpackBackup(UUID playerUUID, String backupId, String backpackData) {
+        if (playerUUID == null || backupId == null || backpackData == null) {
             plugin.getLogger().warning("保存背包备份数据时参数为空: playerUUID=" + playerUUID + 
-                                     ", backpackData=" + (backpackData != null ? "length=" + backpackData.length() : "null") +
                                      ", backupId=" + backupId);
             return false;
         }
@@ -258,15 +254,14 @@ public class DatabaseManager {
                 return true;
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe("保存玩家背包备份数据失败: " + e.getMessage());
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, "保存玩家背包备份数据失败: " + e.getMessage(), e);
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -300,14 +295,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe("加载玩家背包备份数据失败: " + e.getMessage());
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, "加载玩家背包备份数据失败: " + e.getMessage(), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -340,14 +334,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe("获取玩家备份数量失败: " + e.getMessage());
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, "获取玩家备份数量失败: " + e.getMessage(), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -377,14 +370,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe("删除最旧备份失败: " + e.getMessage());
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, "删除最旧备份失败: " + e.getMessage(), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }
@@ -417,14 +409,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().severe("获取玩家备份ID列表失败: " + e.getMessage());
-            e.printStackTrace(); // 添加详细的堆栈跟踪
+            plugin.getLogger().log(Level.SEVERE, "获取玩家备份ID列表失败: " + e.getMessage(), e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().warning("关闭数据库连接时出错: " + e.getMessage());
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                 }
             }
         }

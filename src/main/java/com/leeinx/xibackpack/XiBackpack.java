@@ -63,8 +63,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             databaseManager = new DatabaseManager(this);
             databaseManager.initialize();
         } catch (Exception e) {
-            getLogger().severe("数据库初始化失败: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "数据库初始化失败", e);
             // 禁用插件
             Bukkit.getPluginManager().disablePlugin(this);
             return;
@@ -74,8 +73,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         try {
             backpackManager = new BackpackManager(this);
         } catch (Exception e) {
-            getLogger().severe("背包管理器初始化失败: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "背包管理器初始化失败", e);
             // 禁用插件
             Bukkit.getPluginManager().disablePlugin(this);
             return;
@@ -85,8 +83,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         try {
             commandHandler = new CommandHandler(this);
         } catch (Exception e) {
-            getLogger().severe("指令处理器初始化失败: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "指令处理器初始化失败", e);
             // 禁用插件
             Bukkit.getPluginManager().disablePlugin(this);
             return;
@@ -133,36 +130,6 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         }
     }
 
-    @Override
-    public void onDisable() {
-        // 保存所有背包数据
-        if (backpackManager != null) {
-            try {
-                backpackManager.saveAllBackpacks();
-                getLogger().info("所有背包数据已保存");
-            } catch (Exception e) {
-                getLogger().severe("保存背包数据时出错: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-
-        // 关闭数据库连接
-        if (databaseManager != null) {
-            try {
-                databaseManager.close();
-                getLogger().info("数据库连接已关闭");
-            } catch (Exception e) {
-                getLogger().severe("关闭数据库连接时出错: " + e.getMessage());
-                e.printStackTrace();
-            }
-        }
-        
-        // 输出性能统计
-        getLogger().info("插件运行统计: 打开背包 " + totalBackpackOpens + " 次，数据库操作 " + totalDatabaseOperations + " 次");
-
-        getLogger().info(getMessage("plugin.disabled"));
-    }
-
     private void registerCommands() {
         // 注册命令执行器
         try {
@@ -170,8 +137,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             this.getCommand("xibackpack").setExecutor(commandHandler);
             getLogger().info("命令注册完成");
         } catch (Exception e) {
-            getLogger().severe("命令注册失败: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "命令注册失败", e);
         }
     }
 
@@ -181,8 +147,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             Bukkit.getPluginManager().registerEvents(this, this);
             getLogger().info("事件监听器注册完成");
         } catch (Exception e) {
-            getLogger().severe("事件监听器注册失败: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "事件监听器注册失败", e);
         }
     }
 
@@ -229,8 +194,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             
             getLogger().fine("玩家 " + player.getName() + " 的背包数据已保存");
         } catch (Exception e) {
-            getLogger().severe("保存玩家背包数据时出错: " + e.getMessage());
-            e.printStackTrace();
+            getLogger().log(Level.SEVERE, "保存玩家背包数据时出错", e);
         }
     }
 
@@ -246,8 +210,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                     getLogger().fine("玩家 " + player.getName() + " 的背包已更新");
                 }
             } catch (Exception e) {
-                getLogger().severe("更新背包数据时出错: " + e.getMessage());
-                e.printStackTrace();
+                getLogger().log(Level.SEVERE, "更新背包数据时出错", e);
             }
         }
     }
@@ -283,8 +246,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                     }
                 }
             } catch (Exception e) {
-                getLogger().severe("处理背包点击事件时出错: " + e.getMessage());
-                e.printStackTrace();
+                getLogger().log(Level.SEVERE, "处理背包点击事件时出错", e);
                 // 为安全起见，取消该事件
                 event.setCancelled(true);
             }
@@ -298,7 +260,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
     }
-
+    
     public BackpackManager getBackpackManager() {
         return backpackManager;
     }
@@ -328,7 +290,8 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     public String getMessage(String path) {
         // 使用配置中的语言设置
         String message = messagesConfig.getString(language + "." + path, "§c消息未找到: " + path);
-        return message;
+        // 将 & 符号替换为 § 符号以支持颜色代码
+        return message.replace('&', '§');
     }
     
     public String getMessage(String path, String... placeholders) {
@@ -341,7 +304,8 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             message = message.replace("{" + placeholder + "}", value);
         }
         
-        return message;
+        // 将 & 符号替换为 § 符号以支持颜色代码
+        return message.replace('&', '§');
     }
     
     public String getLanguage() {
@@ -384,5 +348,33 @@ public final class XiBackpack extends JavaPlugin implements Listener {
      */
     public void incrementDatabaseOperations() {
         totalDatabaseOperations++;
+    }
+    
+    @Override
+    public void onDisable() {
+        // 保存所有背包数据
+        if (backpackManager != null) {
+            try {
+                backpackManager.saveAllBackpacks();
+                getLogger().info("所有背包数据已保存");
+            } catch (Exception e) {
+                getLogger().log(Level.SEVERE, "保存背包数据时出错", e);
+            }
+        }
+
+        // 关闭数据库连接
+        if (databaseManager != null) {
+            try {
+                databaseManager.close();
+                getLogger().info("数据库连接已关闭");
+            } catch (Exception e) {
+                getLogger().log(Level.SEVERE, "关闭数据库连接时出错", e);
+            }
+        }
+        
+        // 输出性能统计
+        getLogger().info("插件运行统计: 打开背包 " + totalBackpackOpens + " 次，数据库操作 " + totalDatabaseOperations + " 次");
+
+        getLogger().info(getMessage("plugin.disabled"));
     }
 }
