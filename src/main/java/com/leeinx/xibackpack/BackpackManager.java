@@ -46,7 +46,7 @@ public class BackpackManager {
     }
     
     public void openBackpack(Player player) {
-        openBackpackPage(player, 0);
+        openBackpackPage(player, 0); // 默认打开第一页
     }
     
     public void openBackpackPage(Player player, int page) {
@@ -76,6 +76,9 @@ public class BackpackManager {
                 }
             }
             
+            // 添加屏障方块到未解锁的槽位
+            addBarrierBlocks(inventory, backpack, startSlot, endSlot);
+            
             // 添加控制按钮（下一页、上一页）
             addControlButtons(inventory, page, backpack.getSize());
             
@@ -85,7 +88,36 @@ public class BackpackManager {
             player.sendMessage("§c打开背包页面时发生错误，请联系管理员");
         }
     }
-
+    
+    /**
+     * 在未解锁的槽位中添加屏障方块
+     * @param inventory 背包界面
+     * @param backpack 玩家背包
+     * @param startSlot 起始槽位
+     * @param endSlot 结束槽位
+     */
+    private void addBarrierBlocks(Inventory inventory, PlayerBackpack backpack, int startSlot, int endSlot) {
+        // 只在前5行（0-44槽位）中添加屏障方块
+        // 默认只显示27个槽位（前3行），其余用屏障填充
+        int maxAllowedSlot = Math.min(27, 45); // 默认最大27个槽位
+        
+        // 为未解锁的槽位添加屏障方块
+        for (int i = 0; i < 45; i++) {
+            // 检查是否是已解锁的槽位
+            if (i >= maxAllowedSlot) {
+                // 未解锁的槽位用屏障方块填充
+                ItemStack barrier = new ItemStack(Material.BARRIER);
+                ItemMeta meta = barrier.getItemMeta();
+                if (meta != null) {
+                    // 修复屏障方块显示名称问题
+                    meta.setDisplayName(plugin.getMessage("backpack.slot_locked", "§c锁定槽位"));
+                    barrier.setItemMeta(meta);
+                }
+                inventory.setItem(i, barrier);
+            }
+        }
+    }
+    
     private PlayerBackpack loadBackpackFromDatabase(UUID playerUUID) {
         if (playerUUID == null) {
             plugin.getLogger().warning("尝试加载null UUID的背包数据");
@@ -147,7 +179,7 @@ public class BackpackManager {
             ItemMeta prevMeta = prevButton.getItemMeta();
             if (prevMeta != null) {
                 if (page <= 0) {
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev_first"));
+                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev_first", "§7第一页"));
                 } else {
                     prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev", 
                         "page", String.valueOf(page), 
@@ -161,9 +193,15 @@ public class BackpackManager {
             ItemStack nextButton = new ItemStack(Material.ARROW);
             ItemMeta nextMeta = nextButton.getItemMeta();
             if (nextMeta != null) {
-                nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_unlimited", 
-                    "page", String.valueOf(page + 2), 
-                    "total", String.valueOf(totalPages)));
+                // 修复下一页按钮显示，正确显示当前页和总页数
+                if (page >= totalPages - 1) {
+                    // 如果已经是最后一页，显示特殊文本
+                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_last", "§7最后一页"));
+                } else {
+                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next", 
+                        "page", String.valueOf(page + 2), 
+                        "total", String.valueOf(totalPages)));
+                }
                 nextButton.setItemMeta(nextMeta);
             }
             inventory.setItem(53, nextButton); // 右下角
@@ -172,7 +210,7 @@ public class BackpackManager {
             ItemStack infoButton = new ItemStack(Material.PAPER);
             ItemMeta infoMeta = infoButton.getItemMeta();
             if (infoMeta != null) {
-                infoMeta.setDisplayName(plugin.getMessage("backpack.info_title"));
+                infoMeta.setDisplayName(plugin.getMessage("backpack.info_title", "§e背包信息"));
                 infoMeta.setLore(java.util.Arrays.asList(
                     plugin.getMessage("backpack.info_capacity", "size", String.valueOf(backpackSize)),
                     getLocalizedCurrentPageText(page + 1)
@@ -205,11 +243,22 @@ public class BackpackManager {
     
     private void saveBackpackAsync(PlayerBackpack backpack) {
         try {
+            // 检查插件是否仍然启用
+            if (!plugin.isEnabled()) {
+                plugin.getLogger().warning("插件已禁用，取消异步保存任务");
+                return;
+            }
+            
             // 使用Bukkit调度器异步保存
             new BukkitRunnable() {
                 @Override
                 public void run() {
                     try {
+                        // 检查插件是否仍然启用
+                        if (!plugin.isEnabled()) {
+                            return;
+                        }
+                        
                         // 将背包数据保存到数据库
                         String serializedData = backpack.serialize();
                         boolean success = plugin.getDatabaseManager().savePlayerBackpack(backpack.getPlayerUUID(), serializedData);
@@ -245,15 +294,19 @@ public class BackpackManager {
             int startSlot = page * 45;
             int endSlot = startSlot + 45;
             
-            // 确保背包足够大以容纳当前页面
-            if (backpack.getSize() < endSlot) {
-                backpack.setSize(endSlot);
-            }
+            // 不再自动扩展背包大小，只允许在已有的背包范围内更新物品
+            // 确保不会超出实际背包大小
+            endSlot = Math.min(endSlot, backpack.getSize());
             
             // 更新背包中的物品
-            for (int i = 0; i < 45; i++) { // 只处理前5行的物品格
+            for (int i = 0; i < 45 && (i + startSlot) < backpack.getSize(); i++) { // 只处理前5行的物品格
                 ItemStack item = inventory.getItem(i);
-                backpack.setItem(i + startSlot, item);
+                // 只更新有效的槽位（非屏障方块槽位）
+                if (item != null && item.getType() != Material.BARRIER) {
+                    backpack.setItem(i + startSlot, item);
+                } else if (item == null || item.getType().isAir()) {
+                    backpack.setItem(i + startSlot, null);
+                }
             }
             
             // 保存到数据库
@@ -280,6 +333,9 @@ public class BackpackManager {
             Integer currentPage = playerPages.get(player.getUniqueId());
             if (currentPage == null) currentPage = 0;
             
+            // 计算总页数（基于实际背包大小）
+            int totalPages = (int) Math.ceil((double) backpackSize / 45);
+            
             // 检查是否点击了控制按钮
             if (slot == 45) { // 上一页
                 if (currentPage > 0) {
@@ -287,9 +343,12 @@ public class BackpackManager {
                     return true;
                 }
             } else if (slot == 53) { // 下一页
-                // 允许翻到新的空白页，即使超过了当前背包大小
-                openBackpackPage(player, currentPage + 1);
-                return true;
+                // 仅允许翻到已解锁的页面
+                // 只能访问已存在的页面（0 到 totalPages-1）
+                if (currentPage < totalPages - 1) {
+                    openBackpackPage(player, currentPage + 1);
+                    return true;
+                }
             } else if (slot == 49) { // 信息按钮
                 // 信息按钮不需要特殊处理，只是显示信息
                 return true;

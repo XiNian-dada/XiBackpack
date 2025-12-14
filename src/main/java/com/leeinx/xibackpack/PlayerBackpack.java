@@ -3,6 +3,7 @@ package com.leeinx.xibackpack;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.Material;
 import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
@@ -84,81 +85,107 @@ public class PlayerBackpack {
      * @return 序列化的背包数据
      */
     public String serialize() {
-        Map<Integer, String> serializedItems = new HashMap<>();
+        Map<Integer, Map<String, String>> serializedItems = new HashMap<>();
         for (Map.Entry<Integer, ItemStack> entry : items.entrySet()) {
             if (entry.getValue() != null && !entry.getValue().getType().isAir()) {
-                String nbtData = NBTUtil.getItemNBTDataAdvanced(entry.getValue());
+                ItemStack item = entry.getValue();
+                Map<String, String> itemData = new HashMap<>();
+                
+                // 保存物品类型
+                itemData.put("type", item.getType().name());
+                
+                // 保存物品数量
+                itemData.put("amount", String.valueOf(item.getAmount()));
+                
+                // 保存NBT数据
+                String nbtData = NBTUtil.getItemNBTDataForSerialization(item);
                 if (nbtData != null) {
-                    serializedItems.put(entry.getKey(), nbtData);
+                    itemData.put("nbt", nbtData);
                 }
+                
+                XiBackpack.getInstance().getLogger().info("Serializing item at slot " + entry.getKey() + 
+                    " with type " + item.getType() + 
+                    ", display name " + (item.hasItemMeta() ? item.getItemMeta().getDisplayName() : "none") +
+                    ", amount " + item.getAmount() +
+                    " and NBT: " + nbtData);
+                    
+                serializedItems.put(entry.getKey(), itemData);
             }
         }
 
         Map<String, Object> backpackData = new HashMap<>();
         backpackData.put("size", size);
         backpackData.put("items", serializedItems);
-
+        
+        // 记录序列化数据
         Gson gson = new Gson();
-        return gson.toJson(backpackData);
+        String jsonData = gson.toJson(backpackData);
+        XiBackpack.getInstance().getLogger().info("Serialized backpack data: " + jsonData);
+
+        return jsonData;
     }
 
     /**
      * 从序列化的JSON数据反序列化背包
-     * @param data 序列化的数据
-     * @param playerUUID 玩家UUID
-     * @return 反序列化的背包对象
      */
     public static PlayerBackpack deserialize(String data, UUID playerUUID) {
-        // 参数验证
         if (playerUUID == null) {
             throw new IllegalArgumentException("Player UUID cannot be null");
         }
-        
+
         if (data == null || data.isEmpty()) {
-            // 返回默认大小的空背包
-            return new PlayerBackpack(playerUUID, 27); // 默认大小
+            return new PlayerBackpack(playerUUID, 27);
         }
 
         try {
             Gson gson = new Gson();
-            Type type = new TypeToken<Map<String, Object>>(){}.getType();
-            Map<String, Object> backpackData = gson.fromJson(data, type);
-            
+            Type typeType = new TypeToken<Map<String, Object>>(){}.getType();
+            Map<String, Object> backpackData = gson.fromJson(data, typeType);
+
             Object sizeObj = backpackData.get("size");
-            int size = 27; // 默认大小
+            int size = 27;
             if (sizeObj instanceof Number) {
                 size = ((Number) sizeObj).intValue();
             }
-            
-            // 验证大小有效性
-            if (size <= 0) {
-                size = 27; // 使用默认大小
-            }
+            if (size <= 0) size = 27;
 
             PlayerBackpack backpack = new PlayerBackpack(playerUUID, size);
 
-            Map<String, String> itemsData = (Map<String, String>) backpackData.get("items");
+            Map<String, Object> itemsData = (Map<String, Object>) backpackData.get("items");
             if (itemsData != null) {
-                for (Map.Entry<String, String> entry : itemsData.entrySet()) {
+                for (Map.Entry<String, Object> entry : itemsData.entrySet()) {
                     try {
                         int slot = Integer.parseInt(entry.getKey());
-                        if (slot >= 0) { // 确保槽位索引有效
-                            ItemStack item = NBTUtil.createItemFromNBT(entry.getValue());
-                            if (item != null && !item.getType().isAir()) {
+                        if (slot >= 0) {
+                            Map<String, String> itemData = (Map<String, String>) entry.getValue();
+                            String typeStr = itemData.get("type");
+                            String amountStr = itemData.get("amount");
+                            String nbtStr = itemData.get("nbt");
+
+                            int amount = 1;
+                            try {
+                                amount = Integer.parseInt(amountStr);
+                            } catch (NumberFormatException e) {
+                                amount = 1;
+                            }
+
+                            // FIX: 直接使用修正后的 createItemFromNBTData 方法
+                            // 不要尝试使用 NBT.itemStackFromNBT，因为保存的 NBT 中不包含 id
+                            ItemStack item = NBTUtil.createItemFromNBTData(typeStr, amount, nbtStr);
+
+                            if (item != null) {
                                 backpack.setItem(slot, item);
                             }
                         }
-                    } catch (NumberFormatException e) {
-                        // 忽略无效的槽位索引
-                        XiBackpack.getInstance().getLogger().log(Level.WARNING, "Invalid slot index in backpack data: " + entry.getKey());
+                    } catch (Exception e) {
+                        XiBackpack.getInstance().getLogger().log(Level.WARNING, "Error processing item at slot " + entry.getKey(), e);
                     }
                 }
             }
 
             return backpack;
         } catch (Exception e) {
-            XiBackpack.getInstance().getLogger().log(Level.SEVERE, "Error deserializing player backpack", e);
-            // 解析失败时返回默认背包
+            XiBackpack.getInstance().getLogger().log(Level.SEVERE, "Error deserializing player backpack for player: " + playerUUID, e);
             return new PlayerBackpack(playerUUID, 27);
         }
     }

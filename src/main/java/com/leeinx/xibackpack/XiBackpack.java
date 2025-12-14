@@ -1,5 +1,6 @@
 package com.leeinx.xibackpack;
 
+import org.bukkit.Material;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -243,6 +244,26 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                             event.setCancelled(true);
                             return;
                         }
+                        
+                        // 防止玩家将物品放入未解锁的槽位
+                        if (event.getRawSlot() < 45) { // 只检查物品区域
+                            int currentPage = backpackManager.getPlayerPage(player);
+                            int actualSlot = event.getRawSlot() + currentPage * 45;
+                            
+                            // 如果槽位超过背包大小，则取消放置
+                            if (actualSlot >= backpack.getSize()) {
+                                event.setCancelled(true);
+                                player.sendMessage(getMessage("backpack.slot_not_unlocked"));
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // 防止玩家拿走屏障方块
+                    ItemStack clickedItem = event.getCurrentItem();
+                    if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
+                        event.setCancelled(true);
+                        return;
                     }
                 }
             } catch (Exception e) {
@@ -294,18 +315,23 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         return message.replace('&', '§');
     }
     
-    public String getMessage(String path, String... placeholders) {
-        String message = getMessage(path);
-        
-        // 处理占位符
-        for (int i = 0; i < placeholders.length - 1; i += 2) {
-            String placeholder = placeholders[i];
-            String value = placeholders[i + 1];
-            message = message.replace("{" + placeholder + "}", value);
-        }
-        
+    public String getMessage(String path, String defaultValue) {
+        // 使用配置中的语言设置，提供默认值
+        String message = messagesConfig.getString(language + "." + path, defaultValue);
         // 将 & 符号替换为 § 符号以支持颜色代码
         return message.replace('&', '§');
+    }
+    
+    public String getMessage(String path, String placeholder1, String value1) {
+        return getMessage(path, "§c消息未找到: " + path)
+                .replace("{" + placeholder1 + "}", value1);
+    }
+    
+    public String getMessage(String path, String placeholder1, String value1, 
+                           String placeholder2, String value2) {
+        return getMessage(path, "§c消息未找到: " + path)
+                .replace("{" + placeholder1 + "}", value1)
+                .replace("{" + placeholder2 + "}", value2);
     }
     
     public String getLanguage() {
