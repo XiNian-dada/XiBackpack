@@ -9,30 +9,32 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
-import org.bukkit.permissions.Permission;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.logging.Level;
-import java.util.Locale;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.UUID;
+
+
+//TODO Multi upgrade method
+//TODO Multi player backpack
+//TODO Backup restore
 
 
 public final class XiBackpack extends JavaPlugin implements Listener {
     private static XiBackpack instance;
     private DatabaseManager databaseManager;
     private BackpackManager backpackManager;
+    private TeamBackpackManager teamBackpackManager; // 添加团队背包管理器
     private CommandHandler commandHandler;
     private FileConfiguration messagesConfig;
     private String language;
@@ -73,6 +75,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         // 初始化背包管理器
         try {
             backpackManager = new BackpackManager(this);
+            teamBackpackManager = new TeamBackpackManager(this); // 初始化团队背包管理器
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "背包管理器初始化失败", e);
             // 禁用插件
@@ -208,7 +211,11 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 // 检查是否是我们插件创建的背包界面
                 if (backpackManager.isCloudBackpackInventory(event.getInventory())) {
                     backpackManager.updateBackpackFromInventory(player, event.getInventory());
-                    getLogger().fine("玩家 " + player.getName() + " 的背包已更新");
+                    getLogger().fine("玩家 " + player.getName() + " 的个人背包已更新");
+                } else if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(event.getInventory())) {
+                    teamBackpackManager.updateBackpackFromInventory(player, event.getInventory());
+                    teamBackpackManager.onPlayerCloseBackpack(player); // 通知团队背包管理器玩家已关闭背包
+                    getLogger().fine("玩家 " + player.getName() + " 的团队背包已更新");
                 }
             } catch (Exception e) {
                 getLogger().log(Level.SEVERE, "更新背包数据时出错", e);
@@ -265,6 +272,62 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                         event.setCancelled(true);
                         return;
                     }
+                } else if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(inventory)) {
+                    // 处理团队背包界面点击
+                    int slot = event.getRawSlot();
+                    
+                    String backpackId = teamBackpackManager.getPlayerCurrentBackpackId(player);
+                    if (backpackId != null) {
+                        TeamBackpack backpack = teamBackpackManager.getBackpack(backpackId);
+                        
+                        // 检查是否点击了控制按钮区域（45-53槽位）
+                        if (slot >= 45 && slot <= 53) {
+                            event.setCancelled(true); // 取消控制按钮的默认行为
+                            
+                            // 处理控制按钮点击
+                            if (teamBackpackManager.handleControlButton(player, slot, backpack.getSize())) {
+                                return;
+                            }
+                        }
+                        
+                        // 防止玩家将物品放入控制按钮槽位
+                        if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
+                            if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
+                                event.setCancelled(true);
+                                return;
+                            }
+                            
+                            // 防止玩家将物品放入未解锁的槽位
+                            if (event.getRawSlot() < 45) { // 只检查物品区域
+                                int currentPage = teamBackpackManager.getPlayerPage(player);
+                                int actualSlot = event.getRawSlot() + currentPage * 45;
+                                
+                                // 如果槽位超过背包大小，则取消放置
+                                if (actualSlot >= backpack.getSize()) {
+                                    event.setCancelled(true);
+                                    player.sendMessage(getMessage("backpack.slot_not_unlocked"));
+                                    return;
+                                }
+                            }
+                        }
+                        
+                        // 防止玩家拿走屏障方块
+                        ItemStack clickedItem = event.getCurrentItem();
+                        if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
+                            event.setCancelled(true);
+                            return;
+                        }
+                        
+                        // 检查玩家是否有权限修改背包内容（只有所有者和管理员可以修改）
+                        if (!backpack.isOwner(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
+                            // 如果不是所有者且不是管理员，则禁止修改背包内容
+                            if (event.getRawSlot() < 45) { // 只检查物品区域
+                                event.setCancelled(true);
+                                player.sendMessage("§c您没有权限修改此团队背包的内容！");
+                                return;
+                            }
+                        }
+                    }
                 }
             } catch (Exception e) {
                 getLogger().log(Level.SEVERE, "处理背包点击事件时出错", e);
@@ -284,6 +347,10 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     public BackpackManager getBackpackManager() {
         return backpackManager;
+    }
+    
+    public TeamBackpackManager getTeamBackpackManager() {
+        return teamBackpackManager;
     }
     
     // 消息配置相关方法
@@ -382,9 +449,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         if (backpackManager != null) {
             try {
                 backpackManager.saveAllBackpacks();
-                getLogger().info("所有背包数据已保存");
+                getLogger().info("所有个人背包数据已保存");
             } catch (Exception e) {
-                getLogger().log(Level.SEVERE, "保存背包数据时出错", e);
+                getLogger().log(Level.SEVERE, "保存个人背包数据时出错", e);
             }
         }
 

@@ -23,3 +23,6 @@ permissions:
   xibackpack.bypass.cooldown:
     description: 允许绕过背包冷却时间
     default: op
+  xibackpack.team.create:
+    description: 允许创建团队背包
+    default: true

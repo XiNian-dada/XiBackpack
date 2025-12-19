@@ -1,96 +1,127 @@
-# XiBackpack 插件消息配置文件
-# 支持多语言和自定义消息
-
-# 中文消息
+# 中文消息配置
 zh:
-  command:
-    player_only: "§c该命令只能由玩家执行!"
-    help_title: "§e======= §6XiBackpack 帮助 §e======="
-    help_open: "§a/xibackpack open §7- §f打开云上背包"
-    help_upgrade: "§a/xibackpack upgrade §7- §f升级背包容量"
-    help_help: "§a/xibackpack help §7- §f显示此帮助信息"
-    help_legacy: "§a/backpack §7- §f打开云上背包 (旧指令)"
-  
-  backpack:
-    upgrade_success: "§a背包升级成功! 当前容量: {size} 格，花费: {cost} 金币"
-    upgrade_insufficient_funds: "§c您的金币不足，升级背包需要 {cost} 金币!"
-    economy_not_enabled: "§c经济系统未启用，无法升级背包!"
-    name: "§e§l云上背包"
-    info_title: "§e背包信息"
-    info_capacity: "§7总容量: {size} 格"
-    info_page: "§7当前页: {page}"
-    page_prev_first: "§7第一页"
-    page_next_unlimited: "§a下一页 ({page}/{total})"
-    page_prev: "§a上一页 ({page}/{total})"
-    page_next: "§a下一页 ({page}/{total})"
-    page_next_last: "§7最后一页"
-    slot_locked: "§c锁定槽位"
-    slot_not_unlocked: "§c你不能在此槽位放置物品，因为它尚未解锁！"
-    backup_created: "§a背包备份创建成功! 备份ID: {id}"
-    backup_create_failed: "§c背包备份创建失败!"
-    backup_restored: "§a背包已从备份恢复: {id}"
-    backup_not_found: "§c未找到指定的备份数据!"
-    backup_invalid_id: "§c无效的备份ID格式!"
-    backup_no_permission: "§c您没有权限创建或恢复背包备份!"
-    backup_help_title: "§e======= §6背包备份命令 §e======="
-    backup_help_create: "§a/xibackpack backup create §7- §f创建背包备份"
-    backup_help_restore: "§a/xibackpack backup restore <ID> §7- §f恢复指定备份"
-    
-  database:
-    init_success: "数据库连接池已初始化"
-    init_failed: "数据库连接初始化失败: {error}"
-    table_init_success: "数据库表初始化完成"
-    table_init_failed: "数据库表初始化失败: {error}"
-    save_failed: "保存玩家背包数据失败: {error}"
-    load_failed: "加载玩家背包数据失败: {error}"
-    
+  # 插件启用/禁用消息
   plugin:
-    enabled: "XiBackpack 插件已启用!"
-    disabled: "XiBackpack 插件已禁用!"
+    enabled: "&aXiBackpack插件已启用"
+    disabled: "&cXiBackpack插件已禁用"
 
-# English messages
-en:
+  # 命令相关消息
   command:
-    player_only: "§cThis command can only be executed by players!"
-    help_title: "§e======= §6XiBackpack Help §e======="
-    help_open: "§a/xibackpack open §7- §fOpen cloud backpack"
-    help_upgrade: "§a/xibackpack upgrade §7- §fUpgrade backpack capacity"
-    help_help: "§a/xibackpack help §7- §fShow this help message"
-    help_legacy: "§a/backpack §7- §fOpen cloud backpack (legacy command)"
-  
+    player_only: "&c此命令只能由玩家执行"
+    help_header: "&e======= &6XiBackpack 帮助 &e======="
+    help_open: "&e/backpack &7- 打开个人云背包"
+    help_upgrade: "&e/xibackpack upgrade &7- 升级个人背包"
+    help_backup: "&e/xibackpack backup &7- 管理背包备份"
+    help_team: "&e/xibackpack team &7- 管理团队背包"
+    help_help: "&e/xibackpack help &7- 显示此帮助信息"
+
+  # 背包相关消息
   backpack:
-    upgrade_success: "§aBackpack upgraded successfully! Current capacity: {size} slots, cost: {cost} coins"
-    upgrade_insufficient_funds: "§cYou don't have enough coins, upgrading backpack requires {cost} coins!"
-    economy_not_enabled: "§cEconomy system is not enabled, cannot upgrade backpack!"
-    name: "§e§lCloud Backpack"
-    info_title: "§eBackpack Info"
-    info_capacity: "§7Total capacity: {size} slots"
-    info_page: "§7Current page: {page}"
-    page_prev_first: "§7First page"
-    page_next_unlimited: "§aNext page ({page}/{total})"
-    page_prev: "§aPrevious page ({page}/{total})"
-    page_next: "§aNext page ({page}/{total})"
-    page_next_last: "§7Last page"
-    slot_locked: "§cLocked Slot"
-    slot_not_unlocked: "§cYou cannot place items in this slot because it is not unlocked yet!"
-    backup_created: "§aBackpack backup created successfully! Backup ID: {id}"
-    backup_create_failed: "§cFailed to create backpack backup!"
-    backup_restored: "§aBackpack restored from backup: {id}"
-    backup_not_found: "§cSpecified backup data not found!"
-    backup_invalid_id: "§cInvalid backup ID format!"
-    backup_no_permission: "§cYou don't have permission to create or restore backpack backups!"
-    backup_help_title: "§e======= §6Backpack Backup Commands §e======="
-    backup_help_create: "§a/xibackpack backup create §7- §fCreate backpack backup"
-    backup_help_restore: "§a/xibackpack backup restore <ID> §7- §fRestore specified backup"
+    name: "&e&l云上背包"
+    slot_locked: "&c锁定槽位"
+    slot_not_unlocked: "&c此槽位尚未解锁!"
     
+    # 分页相关
+    page_prev_first: "&7第一页"
+    page_prev: "&e上一页 &7(第{page}页/共{total}页)"
+    page_next_last: "&7最后一页"
+    page_next: "&e下一页 &7(第{page}页/共{total}页)"
+    
+    # 信息按钮
+    info_title: "&e背包信息"
+    info_capacity: "&7容量: &e{size} 格"
+    info_page: "&7当前页: &e第{page}页"
+    
+    # 升级相关
+    economy_not_enabled: "&c经济系统不可用，无法升级背包"
+    upgrade_insufficient_funds: "&c金币不足! 升级需要 &e{cost} &c金币"
+    upgrade_insufficient_permission: "&c权限不足! 升级到 &e{size} &c格需要权限 &e{permission}"
+    upgrade_success: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a金币"
+    upgrade_max_capacity: "&c背包已达到最大容量限制!"
+    
+    # 备份相关
+    backup_no_permission: "&c您没有权限执行备份操作"
+    backup_created: "&a背包备份创建成功! 备份ID: &e{id}"
+    backup_create_failed: "&c创建背包备份失败"
+    backup_not_found: "&c找不到ID为 &e{id} &c的备份"
+    backup_restored: "&a背包备份 &e{id} &a已恢复"
+    backup_help_header: "&e======= &6背包备份帮助 &e======="
+    backup_help_create: "&e/xibackpack backup create &7- 创建背包备份"
+    backup_help_restore: "&e/xibackpack backup restore <ID> &7- 恢复背包备份"
+
+  # 团队背包相关消息
+  team-backpack:
+    create_insufficient_funds: "&c金币不足! 创建团队背包需要 &e{cost} &c金币"
+    create_success: "&a团队背包 '&e{name}&a' 创建成功! ID: &e{id}&a，花费: &e{cost} &a金币"
+    no_permission: "&c您没有权限访问此团队背包"
+    not_found: "&c找不到指定的团队背包"
+
+  # 数据库相关消息
   database:
-    init_success: "Database connection pool initialized"
-    init_failed: "Database connection initialization failed: {error}"
-    table_init_success: "Database tables initialized"
-    table_init_failed: "Database table initialization failed: {error}"
-    save_failed: "Failed to save player backpack data: {error}"
-    load_failed: "Failed to load player backpack data: {error}"
-    
+    init_success: "&a数据库初始化成功"
+    init_failed: "&c数据库初始化失败: {error}"
+    connection_failed: "&c数据库连接失败: {error}"
+
+# 英文消息配置
+en:
+  # Plugin enable/disable messages
   plugin:
-    enabled: "XiBackpack plugin enabled!"
-    disabled: "XiBackpack plugin disabled!"
+    enabled: "&aXiBackpack plugin enabled"
+    disabled: "&cXiBackpack plugin disabled"
+
+  # Command related messages
+  command:
+    player_only: "&cThis command can only be executed by players"
+    help_header: "&e======= &6XiBackpack Help &e======="
+    help_open: "&e/backpack &7- Open personal cloud backpack"
+    help_upgrade: "&e/xibackpack upgrade &7- Upgrade personal backpack"
+    help_backup: "&e/xibackpack backup &7- Manage backpack backups"
+    help_team: "&e/xibackpack team &7- Manage team backpacks"
+    help_help: "&e/xibackpack help &7- Show this help message"
+
+  # Backpack related messages
+  backpack:
+    name: "&e&lCloud Backpack"
+    slot_locked: "&cLocked Slot"
+    slot_not_unlocked: "&cThis slot is not unlocked yet!"
+
+    # Pagination related
+    page_prev_first: "&7First Page"
+    page_prev: "&ePrevious Page &7(Page {page}/{total})"
+    page_next_last: "&7Last Page"
+    page_next: "&eNext Page &7(Page {page}/{total})"
+
+    # Info button
+    info_title: "&eBackpack Info"
+    info_capacity: "&7Capacity: &e{size} slots"
+    info_page: "&7Current Page: &ePage {page}"
+
+    # Upgrade related
+    economy_not_enabled: "&cEconomy system not available, unable to upgrade backpack"
+    upgrade_insufficient_funds: "&cInsufficient funds! Upgrading costs &e{cost} &ccoins"
+    upgrade_insufficient_permission: "&cInsufficient permissions! Upgrading to &e{size} &cslots requires permission &e{permission}"
+    upgrade_success: "&aBackpack upgraded successfully! Current capacity: &e{size} &aslots, cost: &e{cost} &acoins"
+    upgrade_max_capacity: "&cBackpack has reached maximum capacity limit!"
+
+    # Backup related
+    backup_no_permission: "&cYou don't have permission to perform backup operations"
+    backup_created: "&aBackpack backup created successfully! Backup ID: &e{id}"
+    backup_create_failed: "&cFailed to create backpack backup"
+    backup_not_found: "&cBackup with ID &e{id} &cnot found"
+    backup_restored: "&aBackpack backup &e{id} &ahas been restored"
+    backup_help_header: "&e======= &6Backpack Backup Help &e======="
+    backup_help_create: "&e/xibackpack backup create &7- Create backpack backup"
+    backup_help_restore: "&e/xibackpack backup restore <ID> &7- Restore backpack backup"
+
+  # Team backpack related messages
+  team-backpack:
+    create_insufficient_funds: "&cInsufficient funds! Creating a team backpack costs &e{cost} &ccoins"
+    create_success: "&aTeam backpack '&e{name}&a' created successfully! ID: &e{id}&a, cost: &e{cost} &acoins"
+    no_permission: "&cYou don't have permission to access this team backpack"
+    not_found: "&cSpecified team backpack not found"
+
+  # Database related messages
+  database:
+    init_success: "&aDatabase initialized successfully"
+    init_failed: "&cDatabase initialization failed: {error}"
+    connection_failed: "&cDatabase connection failed: {error}"
