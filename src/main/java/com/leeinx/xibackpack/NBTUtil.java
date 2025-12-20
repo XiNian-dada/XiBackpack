@@ -4,12 +4,20 @@ import de.tr7zw.nbtapi.NBT;
 import de.tr7zw.nbtapi.iface.ReadWriteNBT;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.Material;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.logging.Level;
 
 public class NBTUtil {
 
     /**
      * 获取物品的NBT数据（序列化用）
+     * @param item 物品堆
+     * @return 物品的NBT数据字符串，如果物品为空或空气则返回null
      */
     public static String getItemNBTDataForSerialization(ItemStack item) {
         if (item == null || item.getType() == Material.AIR) return null;

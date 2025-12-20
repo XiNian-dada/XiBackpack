@@ -21,6 +21,11 @@ public class CommandHandler implements CommandExecutor {
     private Economy economy = null;
     private boolean economyAvailable = false;
 
+    /**
+     * 构造函数，初始化命令处理器
+     * @param plugin 插件主类实例
+     * @throws IllegalArgumentException 当plugin为null时抛出
+     */
     public CommandHandler(XiBackpack plugin) {
         if (plugin == null) {
             throw new IllegalArgumentException("Plugin cannot be null");
@@ -35,6 +40,14 @@ public class CommandHandler implements CommandExecutor {
         }
     }
 
+    /**
+     * 处理命令执行
+     * @param sender 命令发送者
+     * @param command 被执行的命令
+     * @param label 命令标签
+     * @param args 命令参数
+     * @return 是否成功处理命令
+     */
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         try {
@@ -88,6 +101,10 @@ public class CommandHandler implements CommandExecutor {
                     } else if (args[0].equalsIgnoreCase("team")) {
                         // 团队背包命令
                         handleTeamCommand(player, args);
+                        return true;
+                    } else if (args[0].equalsIgnoreCase("teamgui")) {
+                        // 打开团队背包管理界面
+                        plugin.getTeamBackpackManager().openManagementGUI(player);
                         return true;
                     } else if (args[0].equalsIgnoreCase("help")) {
                         // 显示帮助
@@ -373,15 +390,10 @@ public class CommandHandler implements CommandExecutor {
                 .replace("{id}", backpackId)
                 .replace("{cost}", String.valueOf(createCost)));
 
-        } else if (args[1].equalsIgnoreCase("open")) {
-            // 打开团队背包
-            if (args.length < 3) {
-                player.sendMessage("§c用法: /xibackpack team open <ID>");
-                return;
-            }
-            
-            String backpackId = args[2];
-            plugin.getTeamBackpackManager().openBackpack(player, backpackId);
+        } else if (args[1].equalsIgnoreCase("manage") || args[1].equalsIgnoreCase("gui")) {
+            // 打开团队背包管理界面
+            plugin.getTeamBackpackManager().openManagementGUI(player);
+            return;
         } else if (args[1].equalsIgnoreCase("addmember")) {
             // 添加成员到团队背包
             if (args.length < 4) {
@@ -392,8 +404,28 @@ public class CommandHandler implements CommandExecutor {
             String backpackId = args[2];
             String playerName = args[3];
             
-            // TODO: 实现添加成员逻辑
-            player.sendMessage("§e添加成员功能将在后续版本中实现");
+            // 检查玩家是否有权限添加成员
+            if (!player.hasPermission("xibackpack.team.manage")) {
+                player.sendMessage("§c您没有权限管理团队背包成员!");
+                return;
+            }
+            
+            // 获取目标玩家
+            Player targetPlayer = Bukkit.getPlayerExact(playerName);
+            if (targetPlayer == null) {
+                player.sendMessage("§c玩家 " + playerName + " 不在线或不存在!");
+                return;
+            }
+            
+            // 添加成员到团队背包
+            boolean success = plugin.getTeamBackpackManager().addMemberToBackpack(player, backpackId, targetPlayer);
+            if (success) {
+                player.sendMessage("§a成功将玩家 " + playerName + " 添加到团队背包 " + backpackId);
+                targetPlayer.sendMessage("§a您已被添加到团队背包 " + backpackId);
+            } else {
+                player.sendMessage("§c添加成员失败，请检查背包ID是否正确且您是否有权限!");
+            }
+            return;
         } else if (args[1].equalsIgnoreCase("removemember")) {
             // 从团队背包移除成员
             if (args.length < 4) {
@@ -404,8 +436,38 @@ public class CommandHandler implements CommandExecutor {
             String backpackId = args[2];
             String playerName = args[3];
             
-            // TODO: 实现移除成员逻辑
-            player.sendMessage("§e移除成员功能将在后续版本中实现");
+            // 检查玩家是否有权限移除成员
+            if (!player.hasPermission("xibackpack.team.manage")) {
+                player.sendMessage("§c您没有权限管理团队背包成员!");
+                return;
+            }
+            
+            // 获取目标玩家（可以是在线或离线玩家）
+            UUID targetUUID = null;
+            Player targetPlayer = Bukkit.getPlayerExact(playerName);
+            if (targetPlayer != null) {
+                targetUUID = targetPlayer.getUniqueId();
+            } else {
+                // 尝试通过离线玩家获取UUID
+                targetUUID = Bukkit.getOfflinePlayer(playerName).getUniqueId();
+            }
+            
+            if (targetUUID == null) {
+                player.sendMessage("§c无法找到玩家 " + playerName + "!");
+                return;
+            }
+            
+            // 从团队背包移除成员
+            boolean success = plugin.getTeamBackpackManager().removeMemberFromBackpack(player, backpackId, targetUUID);
+            if (success) {
+                player.sendMessage("§a成功将玩家 " + playerName + " 从团队背包 " + backpackId + " 中移除");
+                if (targetPlayer != null) {
+                    targetPlayer.sendMessage("§a您已被从团队背包 " + backpackId + " 中移除");
+                }
+            } else {
+                player.sendMessage("§c移除成员失败，请检查背包ID是否正确且您是否有权限!");
+            }
+            return;
         } else if (args[1].equalsIgnoreCase("list")) {
             // 列出玩家可以访问的所有团队背包
             // TODO: 实现列出背包逻辑
@@ -444,6 +506,9 @@ public class CommandHandler implements CommandExecutor {
             player.sendMessage(plugin.getMessage("command.help_upgrade"));
             player.sendMessage(plugin.getMessage("command.help_backup"));
             player.sendMessage(plugin.getMessage("command.help_team"));
+            player.sendMessage("§6/xibackpack team gui §7- 打开团队背包管理界面");
+            player.sendMessage("§6/xibackpack team addmember <ID> <玩家名> §7- 添加成员到团队背包");
+            player.sendMessage("§6/xibackpack team removemember <ID> <玩家名> §7- 从团队背包移除成员");
             player.sendMessage(plugin.getMessage("command.help_help"));
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "显示帮助信息时出错", e);

@@ -29,6 +29,96 @@ import java.util.UUID;
 //TODO Multi player backpack
 //TODO Backup restore
 
+/*
+ * 团队背包功能完整测试流程
+ * =========================
+ * 
+ * 测试前准备:
+ * 1. 确保服务器已安装Vault插件并配置好经济系统
+ * 2. 确保数据库连接正常（MySQL/PostgreSQL）
+ * 3. 准备至少2个测试账号（玩家A和玩家B）
+ * 
+ * 测试步骤:
+ * 
+ * 第一部分：个人背包功能测试
+ * 1. 玩家A执行命令 /backpack
+ *    - 验证：打开个人背包界面，初始27格
+ * 2. 在背包中放入各种物品（普通物品、附魔物品、命名物品）
+ * 3. 关闭背包界面，重新打开
+ *    - 验证：物品正确保存和加载
+ * 4. 玩家A执行命令 /xibackpack upgrade
+ *    - 验证：背包扩容，扣除相应金币
+ * 5. 重复步骤2-3，验证扩容后功能正常
+ * 
+ * 第二部分：团队背包数据库存储测试
+ * 1. 玩家A执行命令 /xibackpack team create "测试团队背包"
+ *    - 验证：成功创建团队背包，扣除创建费用
+ *    - 验证：数据库team_backpacks表新增记录
+ *    - 验证：数据库team_backpack_members表新增记录，玩家A为OWNER角色
+ * 2. 重启服务器
+ * 3. 玩家A重新登录，执行命令 /xibackpack team gui
+ *    - 验证：在管理界面能看到刚创建的团队背包
+ * 
+ * 第三部分：团队背包GUI管理界面测试
+ * 1. 玩家A执行命令 /xibackpack team gui
+ *    - 验证：打开GUI界面，四周为黑色玻璃板，底部中央为"创建团队背包"按钮
+ * 2. 点击"创建团队背包"按钮
+ *    - 验证：界面关闭，聊天框提示输入背包名称
+ * 3. 在聊天框输入"第二个测试背包"
+ *    - 验证：成功创建背包，在GUI界面中显示
+ * 4. 点击新创建的背包图标（左键）
+ *    - 验证：打开团队背包界面
+ * 5. 在团队背包中放入物品，关闭界面后重新打开
+ *    - 验证：物品正确保存和加载
+ * 
+ * 第四部分：团队背包权限测试
+ * 1. 玩家A打开已有团队背包（自己创建的）
+ *    - 验证：背包图标显示附魔效果
+ *    - 验证：可以放入和取出物品
+ * 2. 玩家B执行命令 /xibackpack team gui
+ *    - 验证：看不到玩家A创建的背包（因为还未授权）
+ * 3. 玩家A执行命令 /xibackpack team addmember <背包ID> 玩家B
+ *    - 验证：玩家B成功添加到团队背包成员
+ * 4. 玩家B执行命令 /xibackpack team gui
+ *    - 验证：可以看到共享的团队背包
+ *    - 验证：背包图标无附魔效果（因为不是所有者）
+ * 5. 玩家B打开团队背包
+ *    - 验证：可以查看物品但不能修改（根据权限设定）
+ * 6. 玩家A执行命令 /xibackpack team removemember <背包ID> 玩家B
+ *    - 验证：玩家B成功从团队背包成员中移除
+ * 
+ * 第五部分：数据持久化测试
+ * 1. 玩家A在个人背包和团队背包中都放入不同物品
+ * 2. 玩家A断开连接
+ *    - 验证：触发PlayerQuitEvent，自动保存背包数据
+ * 3. 重启服务器
+ * 4. 玩家A重新登录，打开个人背包和团队背包
+ *    - 验证：所有物品正确加载
+ * 
+ * 第六部分：分页功能测试
+ * 1. 玩家A将团队背包扩容到较大尺寸（如100格）
+ * 2. 打开团队背包，检查分页显示
+ *    - 验证：每页正确显示45个物品槽位
+ *    - 验证：超出背包大小的槽位用屏障方块填充
+ * 3. 使用下一页/上一页按钮切换页面
+ *    - 验证：页面切换正常，物品显示正确
+ * 
+ * 第七部分：异常情况测试
+ * 1. 在聊天输入背包名称时，输入特殊字符或超长名称
+ *    - 验证：系统正确处理，不会导致数据库错误
+ * 2. 并发访问同一个团队背包
+ *    - 验证：多个玩家同时访问背包时数据一致性和同步性
+ * 3. 数据库连接中断时的操作
+ *    - 验证：有适当的错误提示，不会导致服务器崩溃
+ * 
+ * 预期结果:
+ * - 个人背包和团队背包数据完全隔离存储
+ * - 团队背包可通过GUI界面方便管理
+ * - 所有背包数据正确持久化，重启后不丢失
+ * - 权限控制按预期工作（所有者可修改，成员只读）
+ * - 分页显示正确，屏障方块正确填充
+ * - 异常情况得到妥善处理
+ */
 
 public final class XiBackpack extends JavaPlugin implements Listener {
     private static XiBackpack instance;
@@ -40,6 +130,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     private String language;
     // 冷却时间记录
     private Map<UUID, Long> cooldowns = new HashMap<>();
+    
+    // 添加用于跟踪玩家创建团队背包状态的Map
+    private Map<UUID, Boolean> playerCreatingTeamBackpack = new HashMap<>();
     
     // 性能监控
     private long totalBackpackOpens = 0;
@@ -196,12 +289,54 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             // 移除冷却时间记录
             cooldowns.remove(player.getUniqueId());
             
+            // 移除创建团队背包状态
+            playerCreatingTeamBackpack.remove(player.getUniqueId());
+            
             getLogger().fine("玩家 " + player.getName() + " 的背包数据已保存");
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "保存玩家背包数据时出错", e);
         }
     }
-
+    
+    @EventHandler
+    public void onPlayerChat(org.bukkit.event.player.AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        UUID playerUUID = player.getUniqueId();
+        String message = event.getMessage();
+        
+        // 检查玩家是否正在创建团队背包
+        if (Boolean.TRUE.equals(playerCreatingTeamBackpack.get(playerUUID))) {
+            event.setCancelled(true); // 取消聊天消息
+            
+            // 创建团队背包
+            String backpackId = teamBackpackManager.createBackpack(player, message);
+            
+            if (backpackId != null) {
+                player.sendMessage("§a成功创建团队背包: " + message);
+                player.sendMessage("§a背包ID: " + backpackId);
+            } else {
+                player.sendMessage("§c创建团队背包失败，请重试");
+            }
+            
+            // 移除创建状态
+            playerCreatingTeamBackpack.remove(playerUUID);
+        }
+    }
+    
+    /**
+     * 设置玩家创建团队背包的状态
+     *
+     * @param playerUUID 玩家UUID
+     * @param creating 是否正在创建
+     */
+    public void setPlayerCreatingTeamBackpack(UUID playerUUID, boolean creating) {
+        if (creating) {
+            playerCreatingTeamBackpack.put(playerUUID, true);
+        } else {
+            playerCreatingTeamBackpack.remove(playerUUID);
+        }
+    }
+    
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         // 当玩家关闭背包时更新背包数据
@@ -209,54 +344,62 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             try {
                 Player player = (Player) event.getPlayer();
                 // 检查是否是我们插件创建的背包界面
-                if (backpackManager.isCloudBackpackInventory(event.getInventory())) {
-                    backpackManager.updateBackpackFromInventory(player, event.getInventory());
-                    getLogger().fine("玩家 " + player.getName() + " 的个人背包已更新");
-                } else if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(event.getInventory())) {
+                // 注意：必须先检查团队背包，因为团队背包也可能被误识别为个人背包
+                if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(event.getInventory())) {
                     teamBackpackManager.updateBackpackFromInventory(player, event.getInventory());
                     teamBackpackManager.onPlayerCloseBackpack(player); // 通知团队背包管理器玩家已关闭背包
                     getLogger().fine("玩家 " + player.getName() + " 的团队背包已更新");
+                } else if (backpackManager.isCloudBackpackInventory(event.getInventory())) {
+                    backpackManager.updateBackpackFromInventory(player, event.getInventory());
+                    getLogger().fine("玩家 " + player.getName() + " 的个人背包已更新");
                 }
             } catch (Exception e) {
                 getLogger().log(Level.SEVERE, "更新背包数据时出错", e);
             }
         }
     }
-    
+
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
         if (event.getWhoClicked() instanceof Player) {
+            // 【新增】阻止在加载界面进行任何操作
+            if (event.getInventory().getHolder() instanceof LoadingHolder) {
+                event.setCancelled(true);
+                return;
+            }
+
             try {
                 Player player = (Player) event.getWhoClicked();
                 Inventory inventory = event.getInventory();
-                
+                // Inventory clickedInventory = event.getClickedInventory(); // clickedInventory 在某些逻辑中可能不需要，这里暂时保留
+
                 // 检查是否是我们的背包界面
                 if (backpackManager.isCloudBackpackInventory(inventory)) {
                     int slot = event.getRawSlot();
-                    PlayerBackpack backpack = backpackManager.getBackpack(player);
-                    
+                    PlayerBackpack backpack = backpackManager.getBackpack(player); // 这里会从缓存获取，不会阻塞
+
                     // 检查是否点击了控制按钮区域（45-53槽位）
                     if (slot >= 45 && slot <= 53) {
                         event.setCancelled(true); // 取消控制按钮的默认行为
-                        
+
                         // 处理控制按钮点击
                         if (backpackManager.handleControlButton(player, slot, backpack.getSize())) {
                             return;
                         }
                     }
-                    
+
                     // 防止玩家将物品放入控制按钮槽位
                     if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
                         if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
                             event.setCancelled(true);
                             return;
                         }
-                        
+
                         // 防止玩家将物品放入未解锁的槽位
                         if (event.getRawSlot() < 45) { // 只检查物品区域
                             int currentPage = backpackManager.getPlayerPage(player);
                             int actualSlot = event.getRawSlot() + currentPage * 45;
-                            
+
                             // 如果槽位超过背包大小，则取消放置
                             if (actualSlot >= backpack.getSize()) {
                                 event.setCancelled(true);
@@ -265,7 +408,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                             }
                         }
                     }
-                    
+
                     // 防止玩家拿走屏障方块
                     ItemStack clickedItem = event.getCurrentItem();
                     if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
@@ -275,33 +418,40 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 } else if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(inventory)) {
                     // 处理团队背包界面点击
                     int slot = event.getRawSlot();
-                    
-                    String backpackId = teamBackpackManager.getPlayerCurrentBackpackId(player);
-                    if (backpackId != null) {
-                        TeamBackpack backpack = teamBackpackManager.getBackpack(backpackId);
-                        
+
+                    if (inventory.getHolder() instanceof TeamBackpackManager.TeamBackpackPageHolder) {
+                        TeamBackpackManager.TeamBackpackPageHolder holder =
+                                (TeamBackpackManager.TeamBackpackPageHolder) inventory.getHolder();
+                        String backpackId = holder.getBackpackId();
+                        int currentPage = holder.getPage();
+
+                        TeamBackpack backpack = teamBackpackManager.getBackpack(backpackId); // 这里会从缓存获取，不会阻塞
+                        if (backpack == null) {
+                            event.setCancelled(true);
+                            return;
+                        }
+
                         // 检查是否点击了控制按钮区域（45-53槽位）
                         if (slot >= 45 && slot <= 53) {
                             event.setCancelled(true); // 取消控制按钮的默认行为
-                            
+
                             // 处理控制按钮点击
                             if (teamBackpackManager.handleControlButton(player, slot, backpack.getSize())) {
                                 return;
                             }
                         }
-                        
+
                         // 防止玩家将物品放入控制按钮槽位
                         if (event.getCursor() != null && !event.getCursor().getType().isAir()) {
                             if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
                                 event.setCancelled(true);
                                 return;
                             }
-                            
+
                             // 防止玩家将物品放入未解锁的槽位
                             if (event.getRawSlot() < 45) { // 只检查物品区域
-                                int currentPage = teamBackpackManager.getPlayerPage(player);
-                                int actualSlot = event.getRawSlot() + currentPage * 45;
-                                
+                                int actualSlot = event.getRawSlot() + currentPage * 45; // 使用从Holder获取的currentPage
+
                                 // 如果槽位超过背包大小，则取消放置
                                 if (actualSlot >= backpack.getSize()) {
                                     event.setCancelled(true);
@@ -310,14 +460,14 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                                 }
                             }
                         }
-                        
+
                         // 防止玩家拿走屏障方块
                         ItemStack clickedItem = event.getCurrentItem();
                         if (clickedItem != null && clickedItem.getType() == Material.BARRIER) {
                             event.setCancelled(true);
                             return;
                         }
-                        
+
                         // 检查玩家是否有权限修改背包内容（只有所有者和管理员可以修改）
                         if (!backpack.isOwner(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
                             // 如果不是所有者且不是管理员，则禁止修改背包内容
@@ -328,6 +478,12 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                             }
                         }
                     }
+                } else if (inventory.getHolder() instanceof TeamBackpackManagementHolder) {
+                    // 处理团队背包管理界面点击
+                    event.setCancelled(true);
+                    int slot = event.getRawSlot();
+                    teamBackpackManager.handleManagementGUIClick(player, slot, event.getClick());
+                    return;
                 }
             } catch (Exception e) {
                 getLogger().log(Level.SEVERE, "处理背包点击事件时出错", e);
@@ -337,18 +493,34 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         }
     }
 
+    /**
+     * 获取插件实例
+     * @return 插件实例
+     */
     public static XiBackpack getInstance() {
         return instance;
     }
 
+    /**
+     * 获取数据库管理器实例
+     * @return 数据库管理器实例
+     */
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
     }
     
+    /**
+     * 获取个人背包管理器实例
+     * @return 个人背包管理器实例
+     */
     public BackpackManager getBackpackManager() {
         return backpackManager;
     }
     
+    /**
+     * 获取团队背包管理器实例
+     * @return 团队背包管理器实例
+     */
     public TeamBackpackManager getTeamBackpackManager() {
         return teamBackpackManager;
     }
@@ -453,6 +625,16 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             } catch (Exception e) {
                 getLogger().log(Level.SEVERE, "保存个人背包数据时出错", e);
             }
+        }
+        // 2. 新增：保存团队背包 (必须添加)
+        if (teamBackpackManager != null) {
+            try {
+                teamBackpackManager.saveAllBackpacks();
+                getLogger().info("所有团队背包数据已保存");
+            }catch (Exception e){
+                getLogger().log(Level.SEVERE, "保存团队背包数据时出错", e);
+            }
+
         }
 
         // 关闭数据库连接

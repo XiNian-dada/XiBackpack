@@ -38,6 +38,13 @@ zh:
     upgrade_insufficient_permission: "&c权限不足! 升级到 &e{size} &c格需要权限 &e{permission}"
     upgrade_success: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a金币"
     upgrade_max_capacity: "&c背包已达到最大容量限制!"
+
+    #加载相关
+    loading_message: "&e正在加载您的个人背包，请稍候..."
+    loading_gui_title: "&0正在加载数据..."
+    loading_item_name: "&e数据加载中..."
+    loading_item_lore: "&7请稍候，正在同步数据库..."
+    load_failed: "&c加载个人背包数据失败，请联系管理员。"
     
     # 备份相关
     backup_no_permission: "&c您没有权限执行备份操作"
@@ -55,6 +62,13 @@ zh:
     create_success: "&a团队背包 '&e{name}&a' 创建成功! ID: &e{id}&a，花费: &e{cost} &a金币"
     no_permission: "&c您没有权限访问此团队背包"
     not_found: "&c找不到指定的团队背包"
+    loading_message: "&d正在加载团队仓库，请稍候..."
+    loading_gui_title: "&0团队仓库加载中..."
+    loading_item_name: "&d团队数据同步中..."
+    loading_item_lore_line1: "&7正在从云端拉取共享仓库"
+    loading_item_lore_line2: "&7请稍候..."
+    load_failed: "&c团队背包不存在或加载失败。"
+    open_error: "&c打开团队背包页面时发生错误，请联系管理员"
 
   # 数据库相关消息
   database:

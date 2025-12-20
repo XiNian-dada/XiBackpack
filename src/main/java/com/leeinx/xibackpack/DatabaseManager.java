@@ -3,24 +3,31 @@ package com.leeinx.xibackpack;
 import com.leeinx.xibackpack.XiBackpack;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.bukkit.inventory.ItemStack;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.UUID;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import java.util.logging.Level;
 
 public class DatabaseManager {
     private XiBackpack plugin;
     private HikariDataSource dataSource;
 
+    /**
+     * 构造函数，初始化数据库管理器
+     * @param plugin 插件主类实例
+     */
     public DatabaseManager(XiBackpack plugin) {
         this.plugin = plugin;
     }
 
+    /**
+     * 初始化数据库连接和表结构
+     */
     public void initialize() {
         try {
             HikariConfig config = new HikariConfig();
@@ -81,6 +88,9 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * 初始化数据库表
+     */
     private void initializeTables() {
         Connection connection = null;
         try {
@@ -114,6 +124,37 @@ public class DatabaseManager {
                 statement.executeUpdate(createBackupTableSQL);
             }
 
+            // 创建团队背包表
+            String createTeamBackpackTableSQL = "CREATE TABLE IF NOT EXISTS team_backpacks (" +
+                    "id VARCHAR(100) PRIMARY KEY, " +
+                    "name VARCHAR(100) NOT NULL, " +
+                    "owner_uuid VARCHAR(36) NOT NULL, " +
+                    "backpack_data LONGTEXT, " +
+                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" +
+                    ")";
+
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(createTeamBackpackTableSQL);
+            }
+
+            // 创建团队背包成员关系表
+            String createTeamMembersTableSQL = "CREATE TABLE IF NOT EXISTS team_backpack_members (" +
+                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                    "backpack_id VARCHAR(100) NOT NULL, " +
+                    "player_uuid VARCHAR(36) NOT NULL, " +
+                    "role ENUM('OWNER', 'MEMBER') DEFAULT 'MEMBER', " +
+                    "joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                    "UNIQUE KEY unique_member (backpack_id, player_uuid), " +
+                    "INDEX idx_backpack_id (backpack_id), " +
+                    "INDEX idx_player_uuid (player_uuid), " +
+                    "FOREIGN KEY (backpack_id) REFERENCES team_backpacks(id) ON DELETE CASCADE" +
+                    ")";
+
+            try (Statement statement = connection.createStatement()) {
+                statement.executeUpdate(createTeamMembersTableSQL);
+            }
+
             plugin.getLogger().info(plugin.getMessage("database.table_init_success"));
         } catch (SQLException e) {
             plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.table_init_failed", "error", e.getMessage()), e);
@@ -128,6 +169,11 @@ public class DatabaseManager {
         }
     }
 
+    /**
+     * 获取数据库连接
+     * @return 数据库连接对象
+     * @throws SQLException 当获取连接失败时抛出
+     */
     public Connection getConnection() throws SQLException {
         if (dataSource == null) {
             throw new SQLException("数据库连接池未初始化");
@@ -135,6 +181,9 @@ public class DatabaseManager {
         return dataSource.getConnection();
     }
 
+    /**
+     * 关闭数据库连接池
+     */
     public void close() {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
@@ -420,5 +469,309 @@ public class DatabaseManager {
             }
         }
         return backupIds;
+    }
+    
+    /**
+     * 保存团队背包数据到数据库
+     * @param backpack 团队背包
+     * @return 是否保存成功
+     */
+    public boolean saveTeamBackpack(TeamBackpack backpack) {
+        if (backpack == null) {
+            plugin.getLogger().warning("保存团队背包数据时参数为空");
+            return false;
+        }
+        
+        Connection connection = null;
+        try {
+            connection = getConnection();
+            
+            // 保存背包基本信息
+            String sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+                         "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, backpack.getId());
+                stmt.setString(2, backpack.getName());
+                stmt.setString(3, backpack.getOwner().toString());
+                
+                // 序列化背包数据（使用复用的个人背包序列化方法）
+                String backpackData = backpack.serialize();
+                plugin.getLogger().info("正在保存团队背包 " + backpack.getId() + "，数据大小: " + backpackData.length());
+                stmt.setString(4, backpackData);
+                
+                stmt.executeUpdate();
+            }
+            
+            // 保存成员信息
+            saveTeamBackpackMembers(connection, backpack);
+            
+            plugin.getLogger().info("成功保存团队背包 " + backpack.getId());
+            return true;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "保存团队背包数据失败: " + e.getMessage(), e);
+            return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 保存团队背包成员信息
+     * @param connection 数据库连接
+     * @param backpack 团队背包
+     * @throws SQLException SQL异常
+     */
+    private void saveTeamBackpackMembers(Connection connection, TeamBackpack backpack) throws SQLException {
+        // 先删除现有的成员关系
+        String deleteSql = "DELETE FROM team_backpack_members WHERE backpack_id = ?";
+        try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
+            deleteStmt.setString(1, backpack.getId());
+            deleteStmt.executeUpdate();
+        }
+        
+        // 插入新的成员关系
+        String insertSql = "INSERT INTO team_backpack_members (backpack_id, player_uuid, role) VALUES (?, ?, ?)";
+        try (PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
+            for (UUID memberUUID : backpack.getMembers()) {
+                insertStmt.setString(1, backpack.getId());
+                insertStmt.setString(2, memberUUID.toString());
+                insertStmt.setString(3, backpack.getOwner().equals(memberUUID) ? "OWNER" : "MEMBER");
+                insertStmt.addBatch();
+            }
+            insertStmt.executeBatch();
+        }
+    }
+    
+    /**
+     * 从数据库加载团队背包成员信息
+     * @param connection 数据库连接
+     * @param backpack 团队背包
+     * @throws SQLException SQL异常
+     */
+    private void loadTeamBackpackMembers(Connection connection, TeamBackpack backpack) throws SQLException {
+        String sql = "SELECT player_uuid FROM team_backpack_members WHERE backpack_id = ?";
+        
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, backpack.getId());
+            
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    UUID memberUUID = UUID.fromString(rs.getString("player_uuid"));
+                    // 使用公共方法添加成员
+                    backpack.addMember(memberUUID);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 从数据库加载团队背包数据
+     * @param backpackId 背包ID
+     * @return 团队背包实例，如果不存在则返回null
+     */
+    public TeamBackpack loadTeamBackpack(String backpackId) {
+        if (backpackId == null || backpackId.isEmpty()) {
+            plugin.getLogger().warning("加载团队背包数据时backpackId为空");
+            return null;
+        }
+        
+        Connection connection = null;
+        try {
+            connection = getConnection();
+            
+            // 查询背包基本信息
+            String sql = "SELECT name, owner_uuid, backpack_data FROM team_backpacks WHERE id = ?";
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, backpackId);
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        String name = rs.getString("name");
+                        UUID ownerUUID = UUID.fromString(rs.getString("owner_uuid"));
+                        String backpackData = rs.getString("backpack_data");
+                        
+                        plugin.getLogger().info("正在加载团队背包 " + backpackId + "，数据大小: " + (backpackData != null ? backpackData.length() : 0));
+                        
+                        // 使用TeamBackpack自身的反序列化方法（复用个人背包的反序列化逻辑）
+                        TeamBackpack backpack = TeamBackpack.deserialize(backpackData, backpackId, name, ownerUUID);
+                        
+                        // 加载成员信息
+                        loadTeamBackpackMembers(connection, backpack);
+                        
+                        plugin.getLogger().info("成功加载团队背包 " + backpackId + "，物品数量: " + backpack.getItems().size());
+                        return backpack;
+                    }
+                }
+            }
+        } catch (SQLException | IllegalArgumentException e) {
+            plugin.getLogger().log(Level.SEVERE, "加载团队背包数据失败: " + e.getMessage(), e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 获取玩家拥有的所有团队背包ID
+     * @param playerUUID 玩家UUID
+     * @return 团队背包ID列表
+     */
+    public List<String> getPlayerOwnedTeamBackpacks(UUID playerUUID) {
+        List<String> backpackIds = new ArrayList<>();
+        if (playerUUID == null) {
+            plugin.getLogger().warning("获取玩家拥有的团队背包时playerUUID为空");
+            return backpackIds;
+        }
+        
+        Connection connection = null;
+        try {
+            connection = getConnection();
+            String sql = "SELECT tb.id FROM team_backpacks tb " +
+                         "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
+                         "WHERE tbm.player_uuid = ? AND tbm.role = 'OWNER'";
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, playerUUID.toString());
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        backpackIds.add(rs.getString("id"));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "获取玩家拥有的团队背包失败: " + e.getMessage(), e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                }
+            }
+        }
+        return backpackIds;
+    }
+    
+    /**
+     * 获取玩家参与的所有团队背包ID
+     * @param playerUUID 玩家UUID
+     * @return 团队背包ID列表
+     */
+    public List<String> getPlayerJoinedTeamBackpacks(UUID playerUUID) {
+        List<String> backpackIds = new ArrayList<>();
+        if (playerUUID == null) {
+            plugin.getLogger().warning("获取玩家参与的团队背包时playerUUID为空");
+            return backpackIds;
+        }
+        
+        Connection connection = null;
+        try {
+            connection = getConnection();
+            String sql = "SELECT DISTINCT tb.id FROM team_backpacks tb " +
+                         "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
+                         "WHERE tbm.player_uuid = ?";
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, playerUUID.toString());
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        backpackIds.add(rs.getString("id"));
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "获取玩家参与的团队背包失败: " + e.getMessage(), e);
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                }
+            }
+        }
+        return backpackIds;
+    }
+    /**
+     * 此方法专门用于在异步线程中调用
+     *
+     * @param id 背包ID
+     * @param name 背包名称
+     * @param ownerUUID 所有者UUID
+     * @param jsonBackpackData 已经序列化好的JSON数据
+     * @param membersSnapshot 成员列表的快照 (Copy)
+     * @return 是否保存成功
+     */
+    public boolean saveTeamBackpackData(String id, String name, UUID ownerUUID, String jsonBackpackData, Set<UUID> membersSnapshot) {
+        if (id == null || jsonBackpackData == null) return false;
+
+        Connection connection = null;
+        try {
+            connection = getConnection();
+
+            // 1. 保存背包基本信息
+            String sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+                    "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, id);
+                stmt.setString(2, name);
+                stmt.setString(3, ownerUUID.toString());
+                stmt.setString(4, jsonBackpackData); // 使用传入的JSON字符串
+                stmt.executeUpdate();
+            }
+
+            // 2. 保存成员信息 (使用传入的快照，不读取 backpack 对象)
+            // 先删除旧成员
+            String deleteSql = "DELETE FROM team_backpack_members WHERE backpack_id = ?";
+            try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
+                deleteStmt.setString(1, id);
+                deleteStmt.executeUpdate();
+            }
+
+            // 插入新成员
+            if (membersSnapshot != null && !membersSnapshot.isEmpty()) {
+                String insertSql = "INSERT INTO team_backpack_members (backpack_id, player_uuid, role) VALUES (?, ?, ?)";
+                try (PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
+                    for (UUID memberUUID : membersSnapshot) {
+                        insertStmt.setString(1, id);
+                        insertStmt.setString(2, memberUUID.toString());
+                        // 简单的判断逻辑：如果成员ID等于所有者ID，就是OWNER
+                        insertStmt.setString(3, ownerUUID.equals(memberUUID) ? "OWNER" : "MEMBER");
+                        insertStmt.addBatch();
+                    }
+                    insertStmt.executeBatch();
+                }
+            }
+
+            return true;
+        } catch (SQLException e) {
+            plugin.getLogger().log(Level.SEVERE, "保存团队背包数据失败: " + e.getMessage(), e);
+            return false;
+        } finally {
+            if (connection != null) {
+                try {
+                    connection.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }

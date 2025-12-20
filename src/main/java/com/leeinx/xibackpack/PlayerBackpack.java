@@ -15,6 +15,12 @@ public class PlayerBackpack {
     private Map<Integer, ItemStack> items;
     private int size;
 
+    /**
+     * 构造函数，创建一个新的玩家背包
+     * @param playerUUID 玩家唯一标识符
+     * @param size 背包大小
+     * @throws IllegalArgumentException 当playerUUID为null或size小于等于0时抛出
+     */
     public PlayerBackpack(UUID playerUUID, int size) {
         // 添加参数验证
         if (playerUUID == null) {
@@ -30,6 +36,12 @@ public class PlayerBackpack {
         this.items = new HashMap<>();
     }
 
+    /**
+     * 在指定槽位设置物品
+     * @param slot 槽位索引
+     * @param item 物品堆
+     * @throws IllegalArgumentException 当slot为负数时抛出
+     */
     public void setItem(int slot, ItemStack item) {
         // 添加边界检查和参数验证
         if (slot < 0) {
@@ -48,6 +60,12 @@ public class PlayerBackpack {
         }
     }
 
+    /**
+     * 获取指定槽位的物品
+     * @param slot 槽位索引
+     * @return 物品堆，如果槽位为空则返回null
+     * @throws IllegalArgumentException 当slot为负数时抛出
+     */
     public ItemStack getItem(int slot) {
         if (slot < 0) {
             throw new IllegalArgumentException("Slot index cannot be negative, got: " + slot);
@@ -56,18 +74,35 @@ public class PlayerBackpack {
         return items.get(slot);
     }
 
+    /**
+     * 获取所有物品的副本
+     * @return 包含所有物品的Map副本
+     */
     public Map<Integer, ItemStack> getItems() {
         return new HashMap<>(items);
     }
 
+    /**
+     * 获取玩家UUID
+     * @return 玩家UUID
+     */
     public UUID getPlayerUUID() {
         return playerUUID;
     }
 
+    /**
+     * 获取背包大小
+     * @return 背包大小
+     */
     public int getSize() {
         return size;
     }
     
+    /**
+     * 设置背包大小
+     * @param size 新的背包大小
+     * @throws IllegalArgumentException 当size小于等于0时抛出
+     */
     public void setSize(int size) {
         // 验证大小是否有效（现在只检查是否为正数，没有上限）
         if (size <= 0) {
@@ -127,6 +162,10 @@ public class PlayerBackpack {
 
     /**
      * 从序列化的JSON数据反序列化背包
+     * @param data 序列化的背包数据
+     * @param playerUUID 玩家UUID
+     * @return 反序列化后的背包实例
+     * @throws IllegalArgumentException 当playerUUID为null时抛出
      */
     public static PlayerBackpack deserialize(String data, UUID playerUUID) {
         if (playerUUID == null) {
