@@ -1,5 +1,6 @@
 package com.leeinx.xibackpack;
 
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -314,6 +315,18 @@ public class BackpackManager {
             }
             inventory.setItem(53, nextButton); // 右下角
 
+            // 填充按钮
+            ItemStack fillButton = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+            ItemMeta fillMeta = fillButton.getItemMeta();
+            if(fillMeta != null){
+                fillMeta.setDisplayName(plugin.getMessage("backpack.fill_button", " "));
+                fillMeta.addEnchant(Enchantment.LUCK, 1, false);
+                fillButton.setItemMeta(fillMeta);
+            }
+            for(int index = 46; index < 53; index++){
+                inventory.setItem(index, fillButton);
+            }
+
             // 显示当前页信息
             ItemStack infoButton = new ItemStack(Material.PAPER);
             ItemMeta infoMeta = infoButton.getItemMeta();
@@ -459,7 +472,6 @@ public class BackpackManager {
                     return true;
                 }
             } else if (slot == 49) { // 信息按钮
-                // 信息按钮不需要特殊处理，只是显示信息
                 return true;
             }
         } catch (Exception e) {
