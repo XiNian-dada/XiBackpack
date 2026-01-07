@@ -61,10 +61,12 @@ jobs:
           tag_name: v${{ steps.info.outputs.VERSION }}
           name: Release v${{ steps.info.outputs.VERSION }}
           body: |
-            ### XiBackpack 新版本 ${{ steps.info.outputs.VERSION }}
-            - 自动构建和发布。
-            - 详情请查看 commit 历史记录。
-          # 附带编译好的 JAR 文件到 Release
+            ### 自动发布说明
+            **最新提交信息：**
+            ${{ github.event.head_commit.message }}
+            
+            ---
+            *由 GitHub Actions 自动构建生成。*
           files: target/*.jar
         env:
           # 必须设置 GITHUB_TOKEN，但 GitHub Actions 会自动处理，无需手动创建
