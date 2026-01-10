@@ -306,6 +306,13 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             getLogger().log(Level.SEVERE, "保存玩家背包数据时出错", e);
         }
     }
+    @EventHandler
+    public void onPlayerJoin(org.bukkit.event.player.PlayerJoinEvent event) {
+        // 玩家进服时，异步拉取一下他的团队背包数量
+        if (teamBackpackManager != null) {
+            teamBackpackManager.updateTeamCountCache(event.getPlayer().getUniqueId());
+        }
+    }
     
     @EventHandler
     public void onPlayerChat(org.bukkit.event.player.AsyncPlayerChatEvent event) {

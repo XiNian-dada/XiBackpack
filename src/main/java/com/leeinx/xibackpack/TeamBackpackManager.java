@@ -19,6 +19,7 @@ public class TeamBackpackManager {
     private Map<UUID, String> playerCurrentBackpack; // 记录玩家当前查看的团队背包ID
     // 记录正在查看特定团队背包的所有玩家
     private Map<String, Set<UUID>> backpackViewers;
+    private Map<UUID, Integer> teamCountCache = new HashMap<>();
 
     /**
      * 构造函数，初始化团队背包管理器
@@ -37,6 +38,29 @@ public class TeamBackpackManager {
         this.backpackViewers = new HashMap<>();
     }
 
+    /**
+     * 更新团队背包数量
+     * @param playerUUID
+     */
+    public void updateTeamCountCache(UUID playerUUID){
+        new BukkitRunnable(){
+            @Override
+            public void run(){
+                List< String> ids = plugin.getDatabaseManager().getPlayerJoinedTeamBackpacks(playerUUID);
+                int count = ids.size();
+
+                new BukkitRunnable(){
+                    @Override
+                    public void run(){
+                        teamCountCache.put(playerUUID, count);
+                    }
+                }.runTask( plugin);
+            }
+        }.runTaskAsynchronously( plugin);
+    }
+    public int getCachedTeamCount(UUID playerUUID) {
+        return teamCountCache.getOrDefault(playerUUID, 0);
+    }
     /**
      * 添加成员到团队背包
      *

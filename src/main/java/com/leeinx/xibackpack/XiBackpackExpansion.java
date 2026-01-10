@@ -45,6 +45,11 @@ public class XiBackpackExpansion extends PlaceholderExpansion {
             return backpack!=null?String.valueOf(backpack.getSize()): "0";
         }
 
+        //%xibackpack_team_count% 有多少个团队背包
+        if(params.equalsIgnoreCase("team_count")){
+            return String.valueOf(plugin.getTeamBackpackManager().getCachedTeamCount(player.getUniqueId()));
+        }
+
 
         return null;
     }
