@@ -2,6 +2,8 @@ name: XiBackpack
 version: '${project.version}'
 main: com.leeinx.xibackpack.XiBackpack
 api-version: '1.16'
+depend: [VaultAPI, NBTAPI]
+softdepend: ["PlaceholderAPI"]
 commands:
   backpack:
     description: 打开个人背包

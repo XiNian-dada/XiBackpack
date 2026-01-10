@@ -6,7 +6,7 @@
 
   <groupId>com.leeinx</groupId>
   <artifactId>XiBackpack</artifactId>
-  <version>1.2.0</version>
+  <version>1.2.1</version>
   <packaging>jar</packaging>
 
   <name>XiBackpack</name>
@@ -69,6 +69,10 @@
           <id>jitpack.io</id>
           <url>https://jitpack.io</url>
       </repository>
+      <repository>
+          <id>placeholderapi</id>
+          <url>https://repo.extendedclip.com/releases/</url>
+      </repository>
   </repositories>
 
   <dependencies>
@@ -111,6 +115,14 @@
           <groupId>com.github.MilkBowl</groupId>
           <artifactId>VaultAPI</artifactId>
           <version>1.7</version>
+          <scope>provided</scope>
+      </dependency>
+
+      <!-- PlaceholderAPI -->
+      <dependency>
+          <groupId>me.clip</groupId>
+          <artifactId>placeholderapi</artifactId>
+          <version>2.11.7</version>
           <scope>provided</scope>
       </dependency>
   </dependencies>

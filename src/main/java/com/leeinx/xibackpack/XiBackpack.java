@@ -1,6 +1,8 @@
 package com.leeinx.xibackpack;
 
+import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Material;
+import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -133,6 +135,8 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     // 添加用于跟踪玩家创建团队背包状态的Map
     private Map<UUID, Boolean> playerCreatingTeamBackpack = new HashMap<>();
+
+    private net.milkbowl.vault.economy.Economy economy = null;
     
     // 性能监控
     private long totalBackpackOpens = 0;
@@ -153,6 +157,11 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         
         // 加载消息配置
         loadMessagesConfig();
+
+        if(!loadDependencies()){
+            setEnabled(false);
+            return;
+        }
 
         // 初始化数据库管理器
         try {
@@ -546,6 +555,62 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             getLogger().log(Level.SEVERE, "无法加载消息配置文件", e);
         }
     }
+    //检测&加载相关附属前置的方法
+    private boolean loadDependencies(){
+
+        if(Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null){
+            try{
+                boolean success = new XiBackpackExpansion(this).register();
+                if (success) {
+                    getLogger().info("已经成功加载 Papi 前置！");
+                } else {
+                    getLogger().warning("Papi 前置加载失败！请检查版本！");
+                }
+            } catch (Throwable e){
+                getLogger().log(Level.SEVERE, "发生未知错误！无法加载 Papi 前置", e);
+            }
+        } else {
+            getLogger().warning("未找到 Papi 前置！将跳过注册！");
+        }
+
+        if(Bukkit.getPluginManager().getPlugin("Vault") != null){
+            try{
+                boolean success = setupEconomy();
+                if (success) {
+                    getLogger().info("已经成功加载 Vault 前置！");
+                }else {
+                    getLogger().severe("Vault 前置加载失败！请检查版本！插件将停用");
+                    setEnabled(false);
+                    return false;
+                }
+            } catch (Throwable e){
+                getLogger().log(Level.SEVERE, "发生未知错误！无法加载 Vault 前置", e);
+                setEnabled(false);
+                return false;
+            }
+        }else{
+            getLogger().severe("未找到 Vault 前置！插件将停用");
+            setEnabled(false);
+            return false;
+        }
+
+        if(Bukkit.getPluginManager().getPlugin("NBTAPI") !=  null){
+            try{
+                de.tr7zw.nbtapi.NBT.class.getName();
+                getLogger().info("已经成功加载 NBTAPI 前置！");
+            } catch (Throwable e){
+                getLogger().log(Level.SEVERE, "发生未知错误！无法加载 NBTAPI 前置", e);
+                setEnabled(false);
+                return false;
+            }
+        } else {
+            getLogger().severe("未找到 NBTAPI 前置！插件将停用");
+            setEnabled(false);
+            return false;
+        }
+
+        return true;
+    }
     
     public String getMessage(String path) {
         // 使用配置中的语言设置
@@ -575,6 +640,23 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     public String getLanguage() {
         return language;
+    }
+
+    private boolean setupEconomy() {
+        try {
+            RegisteredServiceProvider<Economy> rsp =
+                    getServer().getServicesManager().getRegistration(net.milkbowl.vault.economy.Economy.class);
+            if (rsp == null) {
+                return false;
+            }
+            economy = rsp.getProvider();
+            return economy != null;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+    public Economy getEconomy() {
+        return economy;
     }
     
     /**
