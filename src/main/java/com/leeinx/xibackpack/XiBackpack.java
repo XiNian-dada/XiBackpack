@@ -17,10 +17,12 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.Objects;
 import java.util.logging.Level;
 import java.util.Map;
 import java.util.HashMap;
@@ -239,8 +241,8 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     private void registerCommands() {
         // 注册命令执行器
         try {
-            this.getCommand("backpack").setExecutor(this);
-            this.getCommand("xibackpack").setExecutor(commandHandler);
+            Objects.requireNonNull(this.getCommand("backpack")).setExecutor(this);
+            Objects.requireNonNull(this.getCommand("xibackpack")).setExecutor(commandHandler);
             getLogger().info("命令注册完成");
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "命令注册失败", e);
@@ -258,7 +260,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     }
 
     @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+    public boolean onCommand(@NotNull CommandSender sender, Command command, @NotNull String label, String[] args) {
         if (command.getName().equalsIgnoreCase("backpack")) {
             if (sender instanceof Player) {
                 Player player = (Player) sender;
