@@ -30,7 +30,6 @@ public class BackpackManager {
         if (plugin == null) {
             throw new IllegalArgumentException("Plugin cannot be null");
         }
-
         this.plugin = plugin;
         this.loadedBackpacks = new HashMap<>();
         this.playerPages = new HashMap<>();
@@ -421,10 +420,12 @@ public class BackpackManager {
             for (int i = 0; i < 45 && (i + startSlot) < backpack.getSize(); i++) { // 只处理前5行的物品格
                 ItemStack item = inventory.getItem(i);
                 int actualSlot = i + startSlot;
-                // 只更新有效的槽位（非屏障方块槽位）
-                if (item != null && item.getType() != Material.BARRIER) {
+                // 只更新有效的槽位
+                // 修复：移除对 BARRIER 的检查，允许玩家保存屏障方块
+                // 锁定槽位的屏障方块位于 backpack.getSize() 之外，不会被此循环处理
+                if (item != null) {
                     backpack.setItem(actualSlot, item);
-                } else if (item == null || item.getType().isAir()) {
+                } else {
                     backpack.setItem(actualSlot, null);
                 }
             }

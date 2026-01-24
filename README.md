@@ -41,10 +41,33 @@ XiBackpack 是一个功能强大的 Minecraft 服务器插件，为玩家提供�
 
 ## 权限节点
 
+### 基本权限
 - `xibackpack.use` - 允许使用基本背包功能（默认：所有玩家）
-- `xibackpack.admin` - 允许使用备份功能（默认：操作员）
+- `xibackpack.admin` - 允许使用备份功能和全局管理权限（默认：操作员）
 - `xibackpack.bypass.cooldown` - 允许绕过背包冷却时间（默认：操作员）
 - `xibackpack.team.create` - 允许创建团队背包（默认：所有玩家）
+
+### 团队背包特定权限
+每个团队背包都有独立的权限节点，格式为：`xibackpack.team.<背包名称>.admin`
+
+- `xibackpack.team.<背包名称>.admin` - 允许管理特定团队背包的成员和内容（默认：无）
+
+**示例**：
+- 如果你创建了一个名为 "生存小队" 的团队背包，那么对应的管理员权限是：`xibackpack.team.生存小队.admin`
+- 如果你创建了一个名为 "建筑团队" 的团队背包，那么对应的管理员权限是：`xibackpack.team.建筑团队.admin`
+
+**权限继承**：
+- 背包所有者自动拥有该背包的管理员权限
+- 全局管理员 (`xibackpack.admin`) 自动拥有所有团队背包的管理员权限
+
+### 权限说明
+| 权限节点 | 描述 | 默认值 |
+|---------|------|--------|
+| xibackpack.use | 允许使用基本背包功能 | 所有玩家 |
+| xibackpack.admin | 全局管理权限 | 操作员 |
+| xibackpack.bypass.cooldown | 绕过背包冷却时间 | 操作员 |
+| xibackpack.team.create | 创建团队背包 | 所有玩家 |
+| xibackpack.team.<背包名称>.admin | 特定团队背包的管理员权限 | 无 |
 
 ## 配置文件
 

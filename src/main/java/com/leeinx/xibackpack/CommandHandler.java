@@ -383,10 +383,17 @@ public class CommandHandler implements CommandExecutor {
             }
             String backpackName = nameBuilder.toString();
             
-            // 创建团队背包
-            String backpackId = plugin.getTeamBackpackManager().createBackpack(player, backpackName);
+            // 验证背包名称，只允许字母数字
+            if (!backpackName.matches("^[a-zA-Z0-9]+$")) {
+                player.sendMessage("§c团队背包名称只能包含字母和数字!");
+                return;
+            }
             
-            player.sendMessage(plugin.getMessage("team-backpack.create_success", "name", backpackName)
+            // 创建团队背包（确保名称为字母数字）
+            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+            String backpackId = plugin.getTeamBackpackManager().createBackpack(player, sanitizedName);
+            
+            player.sendMessage(plugin.getMessage("team-backpack.create_success", "name", sanitizedName)
                 .replace("{id}", backpackId)
                 .replace("{cost}", String.valueOf(createCost)));
 
@@ -395,20 +402,35 @@ public class CommandHandler implements CommandExecutor {
             plugin.getTeamBackpackManager().openManagementGUI(player);
             return;
         } else if (args[1].equalsIgnoreCase("addmember")) {
-            // 添加成员到团队背包
-            if (args.length < 4) {
-                player.sendMessage("§c用法: /xibackpack team addmember <背包ID> <玩家名>");
-                return;
-            }
-            
-            String backpackId = args[2];
-            String playerName = args[3];
-            
-            // 检查玩家是否有权限添加成员
-            if (!player.hasPermission("xibackpack.team.manage")) {
-                player.sendMessage("§c您没有权限管理团队背包成员!");
-                return;
-            }
+                // 添加成员到团队背包
+                if (args.length < 4) {
+                    player.sendMessage("§c用法: /xibackpack team addmember <背包ID> <玩家名>");
+                    return;
+                }
+                
+                String backpackId = args[2];
+                String playerName = args[3];
+                
+                // 获取背包对象以检查权限
+                TeamBackpack backpack = plugin.getTeamBackpackManager().getBackpack(backpackId);
+                if (backpack == null) {
+                    player.sendMessage("§c找不到指定的团队背包!");
+                    return;
+                }
+                
+                // 检查玩家是否有权限添加成员（使用背包特定权限）
+                String backpackName = backpack.getName();
+                if (backpackName == null) {
+                    backpackName = ""; // 默认空字符串
+                }
+                String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+                String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+                if (!backpack.isOwner(player.getUniqueId()) && 
+                    !player.hasPermission(backpackAdminPermission) && 
+                    !player.hasPermission("xibackpack.admin")) {
+                    player.sendMessage("§c您没有权限管理此团队背包成员!");
+                    return;
+                }
             
             // 获取目标玩家
             Player targetPlayer = Bukkit.getPlayerExact(playerName);
@@ -436,9 +458,24 @@ public class CommandHandler implements CommandExecutor {
             String backpackId = args[2];
             String playerName = args[3];
             
-            // 检查玩家是否有权限移除成员
-            if (!player.hasPermission("xibackpack.team.manage")) {
-                player.sendMessage("§c您没有权限管理团队背包成员!");
+            // 获取背包对象以检查权限
+            TeamBackpack backpack = plugin.getTeamBackpackManager().getBackpack(backpackId);
+            if (backpack == null) {
+                player.sendMessage("§c找不到指定的团队背包!");
+                return;
+            }
+            
+            // 检查玩家是否有权限移除成员（使用背包特定权限）
+            String backpackName = backpack.getName();
+            if (backpackName == null) {
+                backpackName = ""; // 默认空字符串
+            }
+            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            if (!backpack.isOwner(player.getUniqueId()) && 
+                !player.hasPermission(backpackAdminPermission) && 
+                !player.hasPermission("xibackpack.admin")) {
+                player.sendMessage("§c您没有权限管理此团队背包成员!");
                 return;
             }
             

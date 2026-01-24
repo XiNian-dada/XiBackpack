@@ -486,14 +486,34 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                             return;
                         }
 
-                        // 检查玩家是否有权限修改背包内容（只有所有者和管理员可以修改）
-                        if (!backpack.isOwner(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
-                            // 如果不是所有者且不是管理员，则禁止修改背包内容
+                        // 检查玩家是否有权限修改背包内容（所有成员、背包管理员或全局管理员可以修改）
+                        String backpackName = backpack.getName();
+                        if (backpackName == null) {
+                            backpackName = ""; // 默认空字符串
+                        }
+                        String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+                        String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+                        if (!backpack.isMember(player.getUniqueId()) && 
+                            !player.hasPermission(backpackAdminPermission) && 
+                            !player.hasPermission("xibackpack.admin")) {
+                            // 如果不是成员、背包管理员且不是全局管理员，则禁止修改背包内容
                             if (event.getRawSlot() < 45) { // 只检查物品区域
                                 event.setCancelled(true);
                                 player.sendMessage("§c您没有权限修改此团队背包的内容！");
                                 return;
                             }
+                        }
+                        
+                        // 实时同步：当玩家点击团队背包时，立即更新背包数据并同步给其他查看者
+                        if (event.getRawSlot() < 45) { // 只处理物品区域的点击
+                            // 延迟一个tick执行，确保物品操作已完成
+                            new org.bukkit.scheduler.BukkitRunnable() {
+                                @Override
+                                public void run() {
+                                    // 更新背包数据（该方法内部已包含同步逻辑）
+                                    teamBackpackManager.updateBackpackFromInventory(player, event.getInventory());
+                                }
+                            }.runTaskLater(this, 1);
                         }
                     }
                 } else if (inventory.getHolder() instanceof TeamBackpackManagementHolder) {

@@ -82,8 +82,16 @@ public class TeamBackpackManager {
                 return false;
             }
 
-            // 检查请求者是否有权限（必须是所有者或管理员）
-            if (!backpack.isOwner(requester.getUniqueId()) && !requester.hasPermission("xibackpack.admin")) {
+            // 检查请求者是否有权限（必须是所有者、背包管理员或全局管理员）
+            String backpackName = backpack.getName();
+            if (backpackName == null) {
+                backpackName = ""; // 默认空字符串
+            }
+            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            if (!backpack.isOwner(requester.getUniqueId()) && 
+                !requester.hasPermission(backpackAdminPermission) && 
+                !requester.hasPermission("xibackpack.admin")) {
                 requester.sendMessage("§c您没有权限添加成员到此团队背包");
                 return false;
             }
@@ -129,8 +137,16 @@ public class TeamBackpackManager {
                 return false;
             }
 
-            // 检查请求者是否有权限（必须是所有者或管理员）
-            if (!backpack.isOwner(requester.getUniqueId()) && !requester.hasPermission("xibackpack.admin")) {
+            // 检查请求者是否有权限（必须是所有者、背包管理员或全局管理员）
+            String backpackName = backpack.getName();
+            if (backpackName == null) {
+                backpackName = ""; // 默认空字符串
+            }
+            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            if (!backpack.isOwner(requester.getUniqueId()) && 
+                !requester.hasPermission(backpackAdminPermission) && 
+                !requester.hasPermission("xibackpack.admin")) {
                 requester.sendMessage("§c您没有权限从此团队背包移除成员");
                 return false;
             }
@@ -624,9 +640,17 @@ public class TeamBackpackManager {
                 return;
             }
 
-            // 检查玩家是否有权限修改此背包（只有所有者才能修改）
-            if (!backpack.isOwner(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
-                // 普通成员只能查看，不能修改
+            // 检查玩家是否有权限修改此背包（所有成员都可以修改，或背包管理员，或全局管理员）
+            String backpackName = backpack.getName();
+            if (backpackName == null) {
+                backpackName = ""; // 默认空字符串
+            }
+            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
+            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            if (!backpack.isMember(player.getUniqueId()) && 
+                !player.hasPermission(backpackAdminPermission) && 
+                !player.hasPermission("xibackpack.admin")) {
+                // 非成员只能查看，不能修改
                 plugin.getLogger().info("玩家 " + player.getName() + " 尝试修改团队背包 " + backpackId + " 但没有权限");
                 return;
             }
@@ -694,15 +718,88 @@ public class TeamBackpackManager {
                 continue;
             }
 
-            // 检查玩家是否仍在查看同一背包的同一页面
+            // 检查玩家是否仍在查看同一背包
             Inventory viewerInventory = viewer.getOpenInventory().getTopInventory();
             if (viewerInventory.getHolder() instanceof TeamBackpackPageHolder) {
                 TeamBackpackPageHolder holder = (TeamBackpackPageHolder) viewerInventory.getHolder();
-                if (backpackId.equals(holder.getBackpackId()) && page == holder.getPage()) {
-                    // 更新物品显示
-                    for (int i = 0; i < 45 && (i + startSlot) < backpack.getSize(); i++) {
-                        ItemStack item = sourceInventory.getItem(i);
-                        viewerInventory.setItem(i, item);
+                if (backpackId.equals(holder.getBackpackId())) {
+                    int viewerPage = holder.getPage();
+                    
+                    // 如果查看者在同一页面，直接同步源库存数据
+                    if (viewerPage == page) {
+                        // 更新物品显示
+                        for (int i = 0; i < 45 && (i + startSlot) < backpack.getSize(); i++) {
+                            ItemStack item = sourceInventory.getItem(i);
+                            viewerInventory.setItem(i, item);
+                        }
+                        
+                        // 更新屏障方块
+                        addBarrierBlocks(viewerInventory, backpack, viewerPage * 45, Math.min(viewerPage * 45 + 45, backpack.getSize()));
+                    } else {
+                        // 如果查看者在不同页面，从背包数据重新加载
+                        int viewerStartSlot = viewerPage * 45;
+                        int viewerEndSlot = Math.min(viewerStartSlot + 45, backpack.getSize());
+                        
+                        for (int i = viewerStartSlot; i < viewerEndSlot; i++) {
+                            ItemStack item = backpack.getItem(i);
+                            viewerInventory.setItem(i - viewerStartSlot, item);
+                        }
+                        
+                        // 更新屏障方块
+                        addBarrierBlocks(viewerInventory, backpack, viewerStartSlot, viewerEndSlot);
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * 点击事件时实时同步背包更新给其他查看者
+     * @param backpackId 背包ID
+     */
+    public void syncBackpackToViewersOnClick(String backpackId) {
+        TeamBackpack backpack = getBackpack(backpackId);
+        if (backpack == null) return;
+        
+        Set<UUID> viewers = backpackViewers.get(backpackId);
+        if (viewers == null || viewers.isEmpty()) return;
+        
+        // 为每个查看者更新界面
+        Iterator<UUID> iterator = viewers.iterator();
+        while (iterator.hasNext()) {
+            UUID viewerId = iterator.next();
+            Player viewer = Bukkit.getPlayer(viewerId);
+            
+            // 检查玩家是否在线
+            if (viewer == null || !viewer.isOnline()) {
+                iterator.remove(); // 移除离线玩家
+                continue;
+            }
+            
+            // 检查玩家是否仍在查看团队背包
+            Inventory viewerInventory = viewer.getOpenInventory().getTopInventory();
+            if (viewerInventory.getHolder() instanceof TeamBackpackPageHolder) {
+                TeamBackpackPageHolder holder = (TeamBackpackPageHolder) viewerInventory.getHolder();
+                if (backpackId.equals(holder.getBackpackId())) {
+                    int page = holder.getPage();
+                    int startSlot = page * 45;
+                    int endSlot = Math.min(startSlot + 45, backpack.getSize());
+                    
+                    // 重新创建页面内容
+                    for (int i = startSlot; i < endSlot; i++) {
+                        ItemStack item = backpack.getItem(i);
+                        viewerInventory.setItem(i - startSlot, item);
+                    }
+                    
+                    // 更新屏障方块
+                    for (int i = endSlot - startSlot; i < 45; i++) {
+                        ItemStack barrier = new ItemStack(Material.BARRIER);
+                        ItemMeta meta = barrier.getItemMeta();
+                        if (meta != null) {
+                            meta.setDisplayName(plugin.getMessage("backpack.slot_locked", "§c锁定槽位"));
+                            barrier.setItemMeta(meta);
+                        }
+                        viewerInventory.setItem(i, barrier);
                     }
                 }
             }
