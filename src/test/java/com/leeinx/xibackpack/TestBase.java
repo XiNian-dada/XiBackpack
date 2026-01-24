@@ -11,7 +11,6 @@ import be.seeseemelk.mockbukkit.MockBukkit;
 import be.seeseemelk.mockbukkit.ServerMock;
 import be.seeseemelk.mockbukkit.entity.PlayerMock;
 
-@ExtendWith(MockitoExtension.class)
 public abstract class TestBase {
     protected ServerMock server;
     protected XiBackpack plugin;
@@ -21,6 +20,8 @@ public abstract class TestBase {
 
     @BeforeEach
     public void setUp() {
+        // 初始化模拟环境
+        MockBukkit.mock();
         // 创建模拟服务器
         server = MockBukkit.getMock();
         // 加载插件
