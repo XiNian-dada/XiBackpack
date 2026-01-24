@@ -1120,6 +1120,61 @@ public class TeamBackpackManager {
         }
         plugin.getLogger().info("关服保存: 已同步保存 " + count + " 个团队背包数据");
     }
+    /**
+     * 检查团队背包是否存在
+     * @param backpackName 背包名称
+     * @return 是否存在
+     */
+    public boolean backpackExists(String backpackName) {
+        for (TeamBackpack backpack : loadedBackpacks.values()) {
+            if (backpack.getName().equals(backpackName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 检查玩家是否是团队背包成员
+     * @param backpackName 背包名称
+     * @param playerName 玩家名称
+     * @return 是否是成员
+     */
+    public boolean isMember(String backpackName, String playerName) {
+        for (TeamBackpack backpack : loadedBackpacks.values()) {
+            if (backpack.getName().equals(backpackName)) {
+                Player player = Bukkit.getPlayer(playerName);
+                if (player != null) {
+                    return backpack.isMember(player.getUniqueId());
+                }
+                break;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取团队背包所有者名称
+     * @param backpackName 背包名称
+     * @return 所有者名称
+     */
+    public String getBackpackOwner(String backpackName) {
+        for (TeamBackpack backpack : loadedBackpacks.values()) {
+            if (backpack.getName().equals(backpackName)) {
+                return Bukkit.getOfflinePlayer(backpack.getOwner()).getName();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 获取所有已加载的团队背包
+     * @return 背包集合
+     */
+    public Collection<TeamBackpack> getAllBackpacks() {
+        return loadedBackpacks.values();
+    }
+
     // 在 TeamBackpackManager 类文件的最末尾添加
     public static class TeamBackpackPageHolder implements org.bukkit.inventory.InventoryHolder {
         private final String backpackId;

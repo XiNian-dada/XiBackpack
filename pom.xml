@@ -6,7 +6,7 @@
 
   <groupId>com.leeinx</groupId>
   <artifactId>XiBackpack</artifactId>
-  <version>1.2.2</version>
+  <version>1.2.3</version>
   <packaging>jar</packaging>
 
   <name>XiBackpack</name>
@@ -97,8 +97,8 @@
       </dependency>
       <!-- MySQL 驱动 -->
       <dependency>
-          <groupId>mysql</groupId>
-          <artifactId>mysql-connector-java</artifactId>
+          <groupId>com.mysql</groupId>
+          <artifactId>mysql-connector-j</artifactId>
           <version>8.0.33</version>
       </dependency>
 
@@ -130,6 +130,39 @@
           <artifactId>placeholderapi</artifactId>
           <version>2.11.7</version>
           <scope>provided</scope>
+      </dependency>
+
+      <!-- 测试依赖 -->
+      <dependency>
+          <groupId>org.junit.jupiter</groupId>
+          <artifactId>junit-jupiter-api</artifactId>
+          <version>5.9.3</version>
+          <scope>test</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.junit.jupiter</groupId>
+          <artifactId>junit-jupiter-engine</artifactId>
+          <version>5.9.3</version>
+          <scope>test</scope>
+      </dependency>
+      <!-- MockBukkit (使用官方推荐的坐标) -->
+      <dependency>
+          <groupId>com.github.seeseemelk</groupId>
+          <artifactId>MockBukkit-v1.16</artifactId>
+          <version>1.0.0</version>
+          <scope>test</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.mockito</groupId>
+          <artifactId>mockito-core</artifactId>
+          <version>5.3.1</version>
+          <scope>test</scope>
+      </dependency>
+      <dependency>
+          <groupId>org.mockito</groupId>
+          <artifactId>mockito-junit-jupiter</artifactId>
+          <version>5.3.1</version>
+          <scope>test</scope>
       </dependency>
 
   </dependencies>

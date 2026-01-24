@@ -1,73 +1,228 @@
-name: XiBackpack CI/CD Pipeline
+name: CI/CD - Auto Release from POM Version
 
 on:
   push:
-    # 仅在 'main' 分支推送时触发 CI/CD 流程
-    branches: [ master ]
-  workflow_dispatch:
-  # 允许手动从 GitHub Actions 页面触发此工作流
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
-  build_and_release:
+  build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+      pull-requests: write
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # 获取所有历史记录，用于生成完整的commit信息
 
-      # 步骤 1: 设置 Java 环境 (更改为 Java 8)
-      - name: Set up JDK 8
-        uses: actions/setup-java@v4
-        with:
-          # *** 关键更改：将 Java 版本设置为 '8' ***
-          java-version: '8'
-          distribution: 'temurin'
-          cache: maven
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'adopt'
+        cache: maven
 
-      # 步骤 2: 使用 Maven 构建项目
-      - name: Build with Maven
-        # clean install 会编译代码、运行测试并生成 JAR 文件到 target/ 目录
-        run: mvn clean install -B
+    - name: Build with Maven
+      run: mvn -B compile
 
-      # 步骤 3: 提取项目名称和版本号 (用于命名 Release 和 JAR)
-      - name: Extract Project Info
-        id: info
-        run: |
-          # 从 pom.xml 中获取项目版本号
-          PROJECT_VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "VERSION=$PROJECT_VERSION" >> $GITHUB_OUTPUT
-          # 从 pom.xml 中获取项目名称 (或使用仓库名)
-          PROJECT_NAME=${{ github.event.repository.name }}
-          echo "NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
+    - name: Run Tests
+      run: mvn -B test
 
-      # 步骤 4: 上传 JAR 文件作为构建产物 (CI 部分)
-      - name: Upload JAR Artifact (CI)
-        uses: actions/upload-artifact@v4
-        with:
-          # 上传生成的 JAR 文件 (例如: XiBackpack-1.0.0.jar)
-          name: ${{ steps.info.outputs.NAME }}-v${{ steps.info.outputs.VERSION }}
-          # 匹配 target 目录下以 .jar 结尾的文件
-          path: target/*.jar
-          retention-days: 7
+    - name: Package
+      run: mvn -B package -DskipTests
 
-      # 步骤 5: 创建 GitHub Release (CD 部分 - 仅在 main 分支推送时创建)
-      - name: Create GitHub Release (CD)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-        uses: softprops/action-gh-release@v2
-        with:
-          # 使用项目版本号作为 Tag (例如: v1.0.0)
-          tag_name: v${{ steps.info.outputs.VERSION }}
-          name: Release v${{ steps.info.outputs.VERSION }}
-          body: |
-            ### 自动发布说明
-            **最新提交信息：**
-            ${{ github.event.head_commit.message }}
-            
-            ---
-            *由 GitHub Actions 自动构建生成。*
-          files: target/*.jar
-        env:
-          # 必须设置 GITHUB_TOKEN，但 GitHub Actions 会自动处理，无需手动创建
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: XiBackpack-Build
+        path: target/*.jar
+        retention-days: 7
+
+  auto-release:
+    name: Auto Release from POM
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'adopt'
+        cache: maven
+
+    - name: 获取 POM 版本号
+      id: get_version
+      run: |
+        VERSION=$(mvn -q -Dexec.executable=echo -Dexec.args='${project.version}' --non-recursive exec:exec)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
+
+    - name: 检查 Tag 是否已存在
+      id: check_tag
+      run: |
+        if git rev-parse "${{ steps.get_version.outputs.tag_name }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: 创建 Tag
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git tag -a "${{ steps.get_version.outputs.tag_name }}" -m "Release ${{ steps.get_version.outputs.tag_name }}"
+        git push origin "${{ steps.get_version.outputs.tag_name }}"
+
+    - name: 等待 Tag 同步到 GitHub API
+      if: steps.check_tag.outputs.exists == 'false'
+      run: sleep 5
+
+    - name: 下载构建产物
+      if: steps.check_tag.outputs.exists == 'false'
+      uses: actions/download-artifact@v4
+      with:
+        name: XiBackpack-Build
+        path: target
+
+    - name: 生成 Release Notes
+      id: generate_release_notes
+      if: steps.check_tag.outputs.exists == 'false'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // 获取当前版本和tag
+          const version = '${{ steps.get_version.outputs.version }}';
+          const tagName = '${{ steps.get_version.outputs.tag_name }}';
+          
+          // 获取所有tags并排序
+          const tags = await github.rest.git.listMatchingRefs({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: 'refs/tags/',
+            per_page: 100
+          });
+          
+          // 解析tag并按版本号排序（仅包含v开头的语义化版本）
+          const tagNames = tags.data.map(tag => tag.ref.replace('refs/tags/', ''))
+            .filter(tag => /^v\d+\.\d+\.\d+$/.test(tag))
+            .sort((a, b) => {
+              const parseVersion = (v) => v.slice(1).split('.').map(Number);
+              const aVer = parseVersion(a);
+              const bVer = parseVersion(b);
+              for (let i = 0; i < 3; i++) {
+                if (aVer[i] !== bVer[i]) {
+                  return bVer[i] - aVer[i];
+                }
+              }
+              return 0;
+            });
+          
+          // 找到当前tag的位置
+          const currentIndex = tagNames.indexOf(tagName);
+          let previousTag = null;
+          if (currentIndex < tagNames.length - 1) {
+            previousTag = tagNames[currentIndex + 1];
+          }
+          
+          // 获取commits
+          let commits = [];
+          if (previousTag) {
+            // 获取两个tag之间的commits
+            const compareResponse = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base: previousTag,
+              head: tagName
+            });
+            commits = compareResponse.data.commits;
+          } else {
+            // 如果是第一个tag，获取所有commits
+            const commitResponse = await github.rest.repos.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            commits = commitResponse.data;
+          }
+          
+          // 生成Release Notes
+          let releaseNotes = `# XiBackpack ${version}\n\n`;
+          releaseNotes += `## 变更内容\n\n`;
+          
+          if (commits.length === 0) {
+            releaseNotes += `- 自上次发布以来没有变更\n`;
+          } else {
+            commits.forEach(commit => {
+              const commitMessage = commit.commit.message.split('\n')[0];
+              releaseNotes += `- ${commitMessage} (${commit.sha.substring(0, 7)})\n`;
+            });
+          }
+          
+          releaseNotes += `\n## 下载地址\n\n`;
+          releaseNotes += `- [XiBackpack-${version}.jar](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${tagName}/XiBackpack-${version}.jar)\n`;
+          
+          // 设置输出
+          core.setOutput('release_notes', releaseNotes);
+          core.setOutput('version', version);
+
+    - name: 获取 JAR 文件名
+      if: steps.check_tag.outputs.exists == 'false'
+      id: get_jar_name
+      run: |
+        JAR_FILE=$(ls target/*.jar | grep -v original | head -1)
+        echo "jar_file=${JAR_FILE}" >> $GITHUB_OUTPUT
+        echo "jar_name=$(basename $JAR_FILE)" >> $GITHUB_OUTPUT
+
+    - name: 创建 Release
+      if: steps.check_tag.outputs.exists == 'false'
+      uses: softprops/action-gh-release@v2
+      with:
+        name: XiBackpack ${{ steps.get_version.outputs.version }}
+        tag_name: ${{ steps.get_version.outputs.tag_name }}
+        body: ${{ steps.generate_release_notes.outputs.release_notes }}
+        files: ${{ steps.get_jar_name.outputs.jar_file }}
+        draft: false
+        prerelease: false
+
+  quality-check:
+    name: Quality Check
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 8
+      uses: actions/setup-java@v4
+      with:
+        java-version: '8'
+        distribution: 'adopt'
+        cache: maven
+
+    - name: Run Maven Verify
+      run: mvn -B verify -DskipTests
+
+    - name: Check Code Style
+      run: mvn -B checkstyle:check
+
+    - name: Check for Vulnerabilities
+      run: mvn -B org.owasp:dependency-check-maven:check
+      continue-on-error: true  # 漏洞检查结果不影响构建
