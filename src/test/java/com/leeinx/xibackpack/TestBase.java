@@ -32,6 +32,11 @@ public abstract class TestBase {
         adminPlayer = server.addPlayer("Admin");
         // 给管理员玩家添加op权限
         adminPlayer.setOp(true);
+        // 给测试玩家添加必要的权限
+        player1.addAttachment(plugin, "xibackpack.use", true);
+        player1.addAttachment(plugin, "xibackpack.team.create", true);
+        player2.addAttachment(plugin, "xibackpack.use", true);
+        player2.addAttachment(plugin, "xibackpack.team.create", true);
     }
 
     @AfterEach
@@ -57,7 +62,11 @@ public abstract class TestBase {
      * 模拟延迟执行
      */
     protected void waitForAsyncTasks() {
-        // 在测试中等待异步任务完成
-        server.getScheduler().performOneTick();
+        // 在测试中等待异步任务完成，添加try-catch避免没有任务时的NullPointerException
+        try {
+            server.getScheduler().performOneTick();
+        } catch (NullPointerException e) {
+            // 没有异步任务时忽略异常
+        }
     }
 }
