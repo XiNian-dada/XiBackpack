@@ -35,8 +35,11 @@ public abstract class TestBase {
         // 给测试玩家添加必要的权限
         player1.addAttachment(plugin, "xibackpack.use", true);
         player1.addAttachment(plugin, "xibackpack.team.create", true);
+        player1.addAttachment(plugin, "xibackpack.upgrade.36", true);
         player2.addAttachment(plugin, "xibackpack.use", true);
         player2.addAttachment(plugin, "xibackpack.team.create", true);
+        player2.addAttachment(plugin, "xibackpack.upgrade.36", true);
+        adminPlayer.addAttachment(plugin, "xibackpack.upgrade.36", true);
     }
 
     @AfterEach

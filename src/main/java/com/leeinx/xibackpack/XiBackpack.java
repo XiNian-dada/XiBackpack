@@ -272,6 +272,21 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             getLogger().warning("最大备份数量配置无效: " + maxBackups + "，使用默认值 10");
             getConfig().set("backpack.backup.max-count", 10);
         }
+        
+        // 验证经验升级配置
+        boolean expUpgradeEnabled = getConfig().getBoolean("backpack.exp-upgrade.enabled", true);
+        if (!expUpgradeEnabled) {
+            getLogger().info("经验升级功能已禁用");
+        }
+        
+        // 确保经验升级费用配置存在
+        if (getConfig().getConfigurationSection("backpack.exp-upgrade.exp-costs") == null) {
+            getLogger().warning("经验升级费用配置不存在，创建默认配置");
+            getConfig().createSection("backpack.exp-upgrade.exp-costs");
+            getConfig().set("backpack.exp-upgrade.exp-costs.27", 1000);
+            getConfig().set("backpack.exp-upgrade.exp-costs.36", 1500);
+            getConfig().set("backpack.exp-upgrade.exp-costs.45", 2000);
+        }
     }
 
     private void registerCommands() {

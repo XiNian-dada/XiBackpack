@@ -98,4 +98,44 @@ public class BackpackTest extends TestBase {
         adminPlayer.closeInventory();
         waitForAsyncTasks();
     }
+    
+    @Test
+    public void testBackpackUpgradeWithExperience() {
+        // 确保玩家有足够的经验
+        player1.setLevel(2000);
+        
+        // 获取玩家当前背包
+        PlayerBackpack backpack = plugin.getBackpackManager().getBackpack(player1);
+        int initialSize = backpack.getSize();
+        
+        // 执行升级命令
+        server.dispatchCommand(player1, "xibackpack upgrade");
+        waitForAsyncTasks();
+        
+        // 获取升级后的背包大小
+        int newSize = backpack.getSize();
+        
+        // 验证背包升级成功
+        assertEquals(initialSize + 9, newSize, "背包应该成功升级");
+    }
+    
+    @Test
+    public void testBackpackUpgradeWithInsufficientExperience() {
+        // 确保玩家经验不足
+        player1.setLevel(0);
+        
+        // 获取玩家当前背包
+        PlayerBackpack backpack = plugin.getBackpackManager().getBackpack(player1);
+        int initialSize = backpack.getSize();
+        
+        // 执行升级命令
+        server.dispatchCommand(player1, "xibackpack upgrade");
+        waitForAsyncTasks();
+        
+        // 获取升级后的背包大小
+        int newSize = backpack.getSize();
+        
+        // 验证背包未升级
+        assertEquals(initialSize, newSize, "经验不足时背包不应升级");
+    }
 }

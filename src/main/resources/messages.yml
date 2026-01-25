@@ -35,8 +35,10 @@ zh:
     # 升级相关
     economy_not_enabled: "&c经济系统不可用，无法升级背包"
     upgrade_insufficient_funds: "&c金币不足! 升级需要 &e{cost} &c金币"
+    upgrade_insufficient_exp: "&c经验不足! 升级需要 &e{cost} &c经验"
     upgrade_insufficient_permission: "&c权限不足! 升级到 &e{size} &c格需要权限 &e{permission}"
     upgrade_success: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a金币"
+    upgrade_success_exp: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a经验"
     upgrade_max_capacity: "&c背包已达到最大容量限制!"
 
     #加载相关
@@ -113,8 +115,10 @@ en:
     # Upgrade related
     economy_not_enabled: "&cEconomy system not available, unable to upgrade backpack"
     upgrade_insufficient_funds: "&cInsufficient funds! Upgrading costs &e{cost} &ccoins"
+    upgrade_insufficient_exp: "&cInsufficient experience! Upgrading costs &e{cost} &cexperience"
     upgrade_insufficient_permission: "&cInsufficient permissions! Upgrading to &e{size} &cslots requires permission &e{permission}"
     upgrade_success: "&aBackpack upgraded successfully! Current capacity: &e{size} &aslots, cost: &e{cost} &acoins"
+    upgrade_success_exp: "&aBackpack upgraded successfully! Current capacity: &e{size} &aslots, cost: &e{cost} &cexperience"
     upgrade_max_capacity: "&cBackpack has reached maximum capacity limit!"
 
     # Backup related
