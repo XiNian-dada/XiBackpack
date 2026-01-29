@@ -45,7 +45,7 @@ public class BackpackManager {
      */
     public PlayerBackpack getBackpack(Player player) {
         if (player == null) {
-            plugin.getLogger().warning("尝试获取null玩家的背包");
+            com.leeinx.xibackpack.util.LogManager.warning("尝试获取null玩家的背包");
             return null; // 或者抛出 IllegalArgumentException
         }
 
@@ -53,7 +53,7 @@ public class BackpackManager {
         if (!loadedBackpacks.containsKey(playerUUID)) {
             // 作为兜底方案，如果缓存中没有，仍然需要同步加载。
             // 但在优化后的打开流程中，这一步应该由异步加载完成。
-            plugin.getLogger().info("同步加载玩家 " + player.getName() + " 的背包 (缓存未命中)");
+            com.leeinx.xibackpack.util.LogManager.info("同步加载玩家 %s 的背包 (缓存未命中)", player.getName());
             PlayerBackpack backpack = loadBackpackDataSynchronously(playerUUID);
             if (backpack != null) {
                 loadedBackpacks.put(playerUUID, backpack);
@@ -80,7 +80,7 @@ public class BackpackManager {
      */
     public void openBackpackPage(Player player, int page) {
         if (player == null) {
-            plugin.getLogger().warning("尝试为null玩家打开背包页面");
+            com.leeinx.xibackpack.util.LogManager.warning("尝试为null玩家打开背包页面");
             return;
         }
         UUID uuid = player.getUniqueId();
@@ -161,8 +161,7 @@ public class BackpackManager {
 
             player.openInventory(inventory);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "打开个人背包页面时出错", e);
-            player.sendMessage("§c打开个人背包页面时发生错误，请联系管理员");
+            com.leeinx.xibackpack.util.ExceptionHandler.handleBackpackException(player, "打开个人背包页面", e);
         }
     }
 
@@ -275,7 +274,7 @@ public class BackpackManager {
      */
     private void addControlButtons(Inventory inventory, int page, int backpackSize) {
         if (inventory == null) {
-            plugin.getLogger().warning("尝试向null背包添加控制按钮");
+            com.leeinx.xibackpack.util.LogManager.warning("尝试向null背包添加控制按钮");
             return;
         }
 
@@ -339,7 +338,7 @@ public class BackpackManager {
             }
             inventory.setItem(49, infoButton); // 中下
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "添加控制按钮时出错", e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("添加控制按钮", e);
         }
     }
     
@@ -357,7 +356,7 @@ public class BackpackManager {
      */
     public void saveBackpack(PlayerBackpack backpack) {
         if (backpack == null) {
-            plugin.getLogger().warning("尝试保存null背包");
+            com.leeinx.xibackpack.util.LogManager.warning("尝试保存null背包");
             return;
         }
 
@@ -375,10 +374,10 @@ public class BackpackManager {
                     boolean success = plugin.getDatabaseManager().savePlayerBackpack(uuid, serializedData);
                     plugin.incrementDatabaseOperations();
                     if (!success) {
-                        plugin.getLogger().warning("保存玩家 " + uuid + " 的背包数据失败");
+                        com.leeinx.xibackpack.util.LogManager.warning("保存玩家 %s 的背包数据失败", uuid);
                     }
                 } catch (Exception e) {
-                    plugin.getLogger().log(Level.SEVERE, "异步保存个人背包数据时出错", e);
+                    com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("异步保存个人背包数据", e);
                 }
             }
         }.runTaskAsynchronously(plugin);
@@ -391,14 +390,14 @@ public class BackpackManager {
      */
     public void updateBackpackFromInventory(Player player, Inventory inventory) {
         if (player == null || inventory == null) {
-            plugin.getLogger().warning("更新背包时参数为空: player=" + player + ", inventory=" + inventory);
+            com.leeinx.xibackpack.util.LogManager.warning("更新背包时参数为空: player=%s, inventory=%s", player, inventory);
             return;
         }
 
         try {
             PlayerBackpack backpack = getBackpack(player); // 此时背包应已在缓存中
             if (backpack == null) {
-                plugin.getLogger().warning("更新个人背包时未找到背包数据: " + player.getName());
+                com.leeinx.xibackpack.util.LogManager.warning("更新个人背包时未找到背包数据: %s", player.getName());
                 return;
             }
 
@@ -414,7 +413,7 @@ public class BackpackManager {
             // 确保不会超出实际背包大小
             int endSlot = Math.min(startSlot + 45, backpack.getSize());
 
-            plugin.getLogger().info("更新个人背包 " + player.getName() + "，页面 " + page + "，槽位范围 " + startSlot + "-" + endSlot);
+            com.leeinx.xibackpack.util.LogManager.info("更新个人背包 %s，页面 %d，槽位范围 %d-%d", player.getName(), page, startSlot, endSlot);
 
             // 更新背包中的物品
             for (int i = 0; i < 45 && (i + startSlot) < backpack.getSize(); i++) { // 只处理前5行的物品格
@@ -433,7 +432,7 @@ public class BackpackManager {
             // 保存到数据库
             saveBackpack(backpack); // 调用异步保存
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "从背包界面更新个人背包时出错", e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("从背包界面更新个人背包", e);
         }
     }
 
@@ -446,7 +445,7 @@ public class BackpackManager {
      */
     public boolean handleControlButton(Player player, int slot, int backpackSize) {
         if (player == null) {
-            plugin.getLogger().warning("处理控制按钮时玩家为空");
+            com.leeinx.xibackpack.util.LogManager.warning("处理控制按钮时玩家为空");
             return false;
         }
 
@@ -457,7 +456,7 @@ public class BackpackManager {
             // 计算总页数（基于实际背包大小）
             int totalPages = (int) Math.ceil((double) backpackSize / 45);
 
-            plugin.getLogger().info("处理个人背包控制按钮，当前页面: " + currentPage + "，总页面: " + totalPages + "，点击槽位: " + slot);
+            com.leeinx.xibackpack.util.LogManager.info("处理个人背包控制按钮，当前页面: %d，总页面: %d，点击槽位: %d", currentPage, totalPages, slot);
 
             // 检查是否点击了控制按钮
             if (slot == 45) { // 上一页
@@ -476,7 +475,7 @@ public class BackpackManager {
                 return true;
             }
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "处理控制按钮点击时出错", e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("处理控制按钮点击", e);
         }
 
         return false;
@@ -523,11 +522,11 @@ public class BackpackManager {
      */
     public void saveAllBackpacks() {
         if (loadedBackpacks == null || loadedBackpacks.isEmpty()) {
-            plugin.getLogger().info("关服保存: 没有需要保存的个人背包数据。");
+            com.leeinx.xibackpack.util.LogManager.info("关服保存: 没有需要保存的个人背包数据。");
             return;
         }
 
-        plugin.getLogger().info("关服保存: 正在同步保存所有玩家背包数据...");
+        com.leeinx.xibackpack.util.LogManager.info("关服保存: 正在同步保存所有玩家背包数据...");
         int count = 0;
 
         for (PlayerBackpack backpack : loadedBackpacks.values()) {
@@ -537,10 +536,10 @@ public class BackpackManager {
                 plugin.getDatabaseManager().savePlayerBackpack(backpack.getPlayerUUID(), serializedData);
                 count++;
             } catch (Exception e) {
-                plugin.getLogger().log(Level.SEVERE, "关服保存: 玩家 " + backpack.getPlayerUUID() + " 背包时出错", e);
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("关服保存: 玩家 " + backpack.getPlayerUUID() + " 背包", e);
             }
         }
-        plugin.getLogger().info("关服保存: 已同步保存 " + count + " 个个人背包数据");
+        com.leeinx.xibackpack.util.LogManager.info("关服保存: 已同步保存 %d 个个人背包数据", count);
     }
     // 新增：用来在 Inventory 中携带页码信息
     public static class BackpackPageHolder implements org.bukkit.inventory.InventoryHolder {

@@ -33,12 +33,12 @@ public class DatabaseManager {
             HikariConfig config = new HikariConfig();
 
             // 从配置文件读取数据库配置
-            String dbType = plugin.getConfig().getString("database.type", "mysql");
-            String host = plugin.getConfig().getString("database.host", "localhost");
-            int port = plugin.getConfig().getInt("database.port", 3306);
-            String database = plugin.getConfig().getString("database.database", "xibackpack");
-            String username = plugin.getConfig().getString("database.username", "");
-            String password = plugin.getConfig().getString("database.password", "");
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            String host = com.leeinx.xibackpack.util.ConfigManager.getString("database.host");
+            int port = com.leeinx.xibackpack.util.ConfigManager.getInt("database.port");
+            String database = com.leeinx.xibackpack.util.ConfigManager.getString("database.database");
+            String username = com.leeinx.xibackpack.util.ConfigManager.getString("database.username", "");
+            String password = com.leeinx.xibackpack.util.ConfigManager.getString("database.password", "");
 
             // 根据配置设置数据库连接信息
             switch (dbType.toLowerCase()) {
@@ -59,11 +59,11 @@ public class DatabaseManager {
             config.setPassword(password);
 
             // 连接池配置
-            config.setMaximumPoolSize(plugin.getConfig().getInt("database.max-pool-size", 10));
-            config.setMinimumIdle(plugin.getConfig().getInt("database.min-idle", 2));
-            config.setConnectionTimeout(plugin.getConfig().getLong("database.connection-timeout", 30000));
-            config.setIdleTimeout(plugin.getConfig().getLong("database.idle-timeout", 600000));
-            config.setMaxLifetime(plugin.getConfig().getLong("database.max-lifetime", 1800000));
+            config.setMaximumPoolSize(com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10));
+            config.setMinimumIdle(com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2));
+            config.setConnectionTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.connection-timeout", 30000));
+            config.setIdleTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
+            config.setMaxLifetime(com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
 
             // MySQL 特定配置
             config.addDataSourceProperty("cachePrepStmts", "true");
@@ -84,7 +84,7 @@ public class DatabaseManager {
 
             plugin.getLogger().info(plugin.getMessage("database.init_success"));
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.init_failed", "error", e.getMessage()), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("数据库初始化", e);
         }
     }
 
@@ -155,15 +155,15 @@ public class DatabaseManager {
                 statement.executeUpdate(createTeamMembersTableSQL);
             }
 
-            plugin.getLogger().info(plugin.getMessage("database.table_init_success"));
+            com.leeinx.xibackpack.util.LogManager.info(plugin.getMessage("database.table_init_success"));
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.table_init_failed", "error", e.getMessage()), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("数据库表初始化", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -213,7 +213,7 @@ public class DatabaseManager {
      */
     public boolean savePlayerBackpack(UUID playerUUID, String backpackData) {
         if (playerUUID == null || backpackData == null) {
-            plugin.getLogger().warning("保存背包数据时参数为空: playerUUID=" + playerUUID + ", backpackData=" + (backpackData != null ? "length=" + backpackData.length() : "null"));
+            com.leeinx.xibackpack.util.LogManager.warning("保存背包数据时参数为空: playerUUID=%s, backpackData=%s", playerUUID, (backpackData != null ? "length=" + backpackData.length() : "null"));
             return false;
         }
         
@@ -230,14 +230,14 @@ public class DatabaseManager {
                 return true;
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.save_failed", "error", e.getMessage()), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存玩家背包数据", e);
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -250,7 +250,7 @@ public class DatabaseManager {
      */
     public String loadPlayerBackpack(UUID playerUUID) {
         if (playerUUID == null) {
-            plugin.getLogger().warning("加载背包数据时playerUUID为空");
+            com.leeinx.xibackpack.util.LogManager.warning("加载背包数据时playerUUID为空");
             return null;
         }
         
@@ -276,13 +276,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, plugin.getMessage("database.load_failed", "error", e.getMessage()), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载玩家背包数据", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -298,8 +298,7 @@ public class DatabaseManager {
      */
     public boolean savePlayerBackpackBackup(UUID playerUUID, String backupId, String backpackData) {
         if (playerUUID == null || backupId == null || backpackData == null) {
-            plugin.getLogger().warning("保存背包备份数据时参数为空: playerUUID=" + playerUUID + 
-                                     ", backupId=" + backupId);
+            com.leeinx.xibackpack.util.LogManager.warning("保存背包备份数据时参数为空: playerUUID=%s, backupId=%s", playerUUID, backupId);
             return false;
         }
         
@@ -308,7 +307,7 @@ public class DatabaseManager {
             connection = getConnection();
             
             // 检查备份数量限制
-            if (getBackupCount(playerUUID) >= plugin.getConfig().getInt("backpack.backup.max-count", 10)) {
+            if (getBackupCount(playerUUID) >= com.leeinx.xibackpack.util.ConfigManager.getInt("backpack.backup.max-count")) {
                 // 删除最旧的备份
                 deleteOldestBackup(playerUUID);
             }
@@ -324,14 +323,14 @@ public class DatabaseManager {
                 return true;
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "保存玩家背包备份数据失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存玩家背包备份数据", e);
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -345,7 +344,7 @@ public class DatabaseManager {
      */
     public String loadPlayerBackpackBackup(UUID playerUUID, String backupId) {
         if (playerUUID == null || backupId == null) {
-            plugin.getLogger().warning("加载背包备份数据时参数为空: playerUUID=" + playerUUID + ", backupId=" + backupId);
+            com.leeinx.xibackpack.util.LogManager.warning("加载背包备份数据时参数为空: playerUUID=%s, backupId=%s", playerUUID, backupId);
             return null;
         }
         
@@ -365,13 +364,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "加载玩家背包备份数据失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载玩家背包备份数据", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -385,7 +384,7 @@ public class DatabaseManager {
      */
     private int getBackupCount(UUID playerUUID) {
         if (playerUUID == null) {
-            plugin.getLogger().warning("获取备份数量时playerUUID为空");
+            com.leeinx.xibackpack.util.LogManager.warning("获取备份数量时playerUUID为空");
             return 0;
         }
         
@@ -404,13 +403,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "获取玩家备份数量失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("获取玩家备份数量", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -423,7 +422,7 @@ public class DatabaseManager {
      */
     private void deleteOldestBackup(UUID playerUUID) {
         if (playerUUID == null) {
-            plugin.getLogger().warning("删除最旧备份时playerUUID为空");
+            com.leeinx.xibackpack.util.LogManager.warning("删除最旧备份时playerUUID为空");
             return;
         }
         
@@ -436,17 +435,17 @@ public class DatabaseManager {
                 stmt.setString(1, playerUUID.toString());
                 int deleted = stmt.executeUpdate();
                 if (deleted > 0) {
-                    plugin.getLogger().info("已删除玩家 " + playerUUID + " 的最旧备份");
+                    com.leeinx.xibackpack.util.LogManager.info("已删除玩家 %s 的最旧备份", playerUUID);
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "删除最旧备份失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("删除最旧备份", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -460,7 +459,7 @@ public class DatabaseManager {
     public List<String> getPlayerBackupIds(UUID playerUUID) {
         List<String> backupIds = new ArrayList<>();
         if (playerUUID == null) {
-            plugin.getLogger().warning("获取玩家备份ID列表时playerUUID为空");
+            com.leeinx.xibackpack.util.LogManager.warning("获取玩家备份ID列表时playerUUID为空");
             return backupIds;
         }
         
@@ -479,13 +478,13 @@ public class DatabaseManager {
                 }
             }
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "获取玩家备份ID列表失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("获取玩家备份ID列表", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -499,7 +498,7 @@ public class DatabaseManager {
      */
     public boolean saveTeamBackpack(TeamBackpack backpack) {
         if (backpack == null) {
-            plugin.getLogger().warning("保存团队背包数据时参数为空");
+            com.leeinx.xibackpack.util.LogManager.warning("保存团队背包数据时参数为空");
             return false;
         }
         
@@ -524,7 +523,7 @@ public class DatabaseManager {
                 
                 // 序列化背包数据（使用复用的个人背包序列化方法）
                 String backpackData = backpack.serialize();
-                plugin.getLogger().info("正在保存团队背包 " + backpack.getId() + "，数据大小: " + backpackData.length());
+                com.leeinx.xibackpack.util.LogManager.info("正在保存团队背包 %s，数据大小: %d", backpack.getId(), backpackData.length());
                 stmt.setString(4, backpackData);
                 
                 stmt.executeUpdate();
@@ -533,17 +532,17 @@ public class DatabaseManager {
             // 保存成员信息
             saveTeamBackpackMembers(connection, backpack);
             
-            plugin.getLogger().info("成功保存团队背包 " + backpack.getId());
+            com.leeinx.xibackpack.util.LogManager.info("成功保存团队背包 %s", backpack.getId());
             return true;
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "保存团队背包数据失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存团队背包数据", e);
             return false;
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }
@@ -605,7 +604,7 @@ public class DatabaseManager {
      */
     public TeamBackpack loadTeamBackpack(String backpackId) {
         if (backpackId == null || backpackId.isEmpty()) {
-            plugin.getLogger().warning("加载团队背包数据时backpackId为空");
+            com.leeinx.xibackpack.util.LogManager.warning("加载团队背包数据时backpackId为空");
             return null;
         }
         
@@ -631,7 +630,7 @@ public class DatabaseManager {
                         UUID ownerUUID = UUID.fromString(rs.getString("owner_uuid"));
                         String backpackData = rs.getString("backpack_data");
                         
-                        plugin.getLogger().info("正在加载团队背包 " + backpackId + "，数据大小: " + (backpackData != null ? backpackData.length() : 0));
+                        com.leeinx.xibackpack.util.LogManager.info("正在加载团队背包 %s，数据大小: %d", backpackId, (backpackData != null ? backpackData.length() : 0));
                         
                         // 使用TeamBackpack自身的反序列化方法（复用个人背包的反序列化逻辑）
                         TeamBackpack backpack = TeamBackpack.deserialize(backpackData, backpackId, name, ownerUUID);
@@ -639,19 +638,19 @@ public class DatabaseManager {
                         // 加载成员信息
                         loadTeamBackpackMembers(connection, backpack);
                         
-                        plugin.getLogger().info("成功加载团队背包 " + backpackId + "，物品数量: " + backpack.getItems().size());
+                        com.leeinx.xibackpack.util.LogManager.info("成功加载团队背包 %s，物品数量: %d", backpackId, backpack.getItems().size());
                         return backpack;
                     }
                 }
             }
         } catch (SQLException | IllegalArgumentException e) {
-            plugin.getLogger().log(Level.SEVERE, "加载团队背包数据失败: " + e.getMessage(), e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载团队背包数据", e);
         } finally {
             if (connection != null) {
                 try {
                     connection.close();
                 } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
+                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                 }
             }
         }

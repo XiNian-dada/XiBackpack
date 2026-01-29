@@ -166,14 +166,16 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         // 保存默认配置
         saveDefaultConfig();
         
-        // 验证配置
-        validateConfig();
-        
-        // 获取语言设置
-        language = getConfig().getString("language", "zh");
+        // 初始化工具类
+        com.leeinx.xibackpack.util.ExceptionHandler.initialize(this);
+        com.leeinx.xibackpack.util.LogManager.initialize(this);
+        com.leeinx.xibackpack.util.ConfigManager.initialize(this);
         
         // 加载消息配置
         loadMessagesConfig();
+        
+        // 获取语言设置
+        language = com.leeinx.xibackpack.util.ConfigManager.getString("language");
 
         if(!loadDependencies()){
             setEnabled(false);
@@ -243,50 +245,10 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     /**
      * 验证配置文件
+     * 委托给ConfigManager处理
      */
     private void validateConfig() {
-        // 验证数据库配置
-        String dbType = getConfig().getString("database.type", "mysql");
-        if (!dbType.matches("mysql|postgresql|mongodb")) {
-            getLogger().warning("数据库类型配置无效: " + dbType + "，使用默认值 mysql");
-            getConfig().set("database.type", "mysql");
-        }
-        
-        // 验证背包配置
-        int backpackSize = getConfig().getInt("backpack.size", 27);
-        if (backpackSize <= 0) {
-            getLogger().warning("背包大小配置无效: " + backpackSize + "，使用默认值 27");
-            getConfig().set("backpack.size", 27);
-        }
-        
-        // 验证冷却时间配置
-        long cooldown = getConfig().getLong("backpack.cooldown", 1000);
-        if (cooldown < 0) {
-            getLogger().warning("冷却时间配置无效: " + cooldown + "，使用默认值 1000");
-            getConfig().set("backpack.cooldown", 1000);
-        }
-        
-        // 验证备份数量配置
-        int maxBackups = getConfig().getInt("backpack.backup.max-count", 10);
-        if (maxBackups <= 0) {
-            getLogger().warning("最大备份数量配置无效: " + maxBackups + "，使用默认值 10");
-            getConfig().set("backpack.backup.max-count", 10);
-        }
-        
-        // 验证经验升级配置
-        boolean expUpgradeEnabled = getConfig().getBoolean("backpack.exp-upgrade.enabled", true);
-        if (!expUpgradeEnabled) {
-            getLogger().info("经验升级功能已禁用");
-        }
-        
-        // 确保经验升级费用配置存在
-        if (getConfig().getConfigurationSection("backpack.exp-upgrade.exp-costs") == null) {
-            getLogger().warning("经验升级费用配置不存在，创建默认配置");
-            getConfig().createSection("backpack.exp-upgrade.exp-costs");
-            getConfig().set("backpack.exp-upgrade.exp-costs.27", 1000);
-            getConfig().set("backpack.exp-upgrade.exp-costs.36", 1500);
-            getConfig().set("backpack.exp-upgrade.exp-costs.45", 2000);
-        }
+        com.leeinx.xibackpack.util.ConfigManager.validateConfig();
     }
 
     private void registerCommands() {
@@ -318,7 +280,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 
                 // 检查权限
                 if (!player.hasPermission("xibackpack.use")) {
-                    player.sendMessage("§c您没有权限使用此命令!");
+                    com.leeinx.xibackpack.util.LogManager.sendMessage(player, "error.no_permission");
                     return true;
                 }
                 
@@ -330,10 +292,14 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 // 增加统计计数
                 totalBackpackOpens++;
                 
-                backpackManager.openBackpack(player);
+                // 使用安全执行模式打开背包
+                com.leeinx.xibackpack.util.ExceptionHandler.safelyExecute("打开个人背包", () -> {
+                    backpackManager.openBackpack(player);
+                    return null;
+                });
                 return true;
             } else {
-                sender.sendMessage(getMessage("command.player_only"));
+                com.leeinx.xibackpack.util.LogManager.sendMessage(sender, "command.player_only");
                 return true;
             }
         }
@@ -354,9 +320,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             // 移除创建团队背包状态
             playerCreatingTeamBackpack.remove(player.getUniqueId());
             
-            getLogger().fine("玩家 " + player.getName() + " 的背包数据已保存");
+            com.leeinx.xibackpack.util.LogManager.info("玩家 %s 的背包数据已保存", player.getName());
         } catch (Exception e) {
-            getLogger().log(Level.SEVERE, "保存玩家背包数据时出错", e);
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("保存玩家背包数据", e);
         }
     }
     @EventHandler
@@ -417,13 +383,13 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 if (teamBackpackManager != null && teamBackpackManager.isTeamBackpackInventory(event.getInventory())) {
                     teamBackpackManager.updateBackpackFromInventory(player, event.getInventory());
                     teamBackpackManager.onPlayerCloseBackpack(player); // 通知团队背包管理器玩家已关闭背包
-                    getLogger().fine("玩家 " + player.getName() + " 的团队背包已更新");
+                    com.leeinx.xibackpack.util.LogManager.info("玩家 %s 的团队背包已更新", player.getName());
                 } else if (backpackManager.isCloudBackpackInventory(event.getInventory())) {
                     backpackManager.updateBackpackFromInventory(player, event.getInventory());
-                    getLogger().fine("玩家 " + player.getName() + " 的个人背包已更新");
+                    com.leeinx.xibackpack.util.LogManager.info("玩家 %s 的个人背包已更新", player.getName());
                 }
             } catch (Exception e) {
-                getLogger().log(Level.SEVERE, "更新背包数据时出错", e);
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("更新背包数据", e);
             }
         }
     }
@@ -575,10 +541,10 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                     return;
                 }
             } catch (Exception e) {
-                getLogger().log(Level.SEVERE, "处理背包点击事件时出错", e);
-                // 为安全起见，取消该事件
-                event.setCancelled(true);
-            }
+            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("处理背包点击事件", e);
+            // 为安全起见，取消该事件
+            event.setCancelled(true);
+        }
         }
     }
 
@@ -758,7 +724,7 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         
         UUID playerUUID = player.getUniqueId();
         long currentTime = System.currentTimeMillis();
-        long cooldownTime = getConfig().getLong("backpack.cooldown", 1000); // 默认1秒冷却
+        long cooldownTime = com.leeinx.xibackpack.util.ConfigManager.getLong("backpack.cooldown"); // 从配置管理器获取冷却时间
         
         if (cooldowns.containsKey(playerUUID)) {
             long lastOpenTime = cooldowns.get(playerUUID);
@@ -785,22 +751,25 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     @Override
     public void onDisable() {
+        // 关闭配置文件监视器
+        com.leeinx.xibackpack.util.ConfigManager.shutdown();
+        
         // 保存所有背包数据
         if (backpackManager != null) {
             try {
                 backpackManager.saveAllBackpacks();
-                getLogger().info("所有个人背包数据已保存");
+                com.leeinx.xibackpack.util.LogManager.info("所有个人背包数据已保存");
             } catch (Exception e) {
-                getLogger().log(Level.SEVERE, "保存个人背包数据时出错", e);
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("保存个人背包数据", e);
             }
         }
         // 2. 新增：保存团队背包 (必须添加)
         if (teamBackpackManager != null) {
             try {
                 teamBackpackManager.saveAllBackpacks();
-                getLogger().info("所有团队背包数据已保存");
+                com.leeinx.xibackpack.util.LogManager.info("所有团队背包数据已保存");
             }catch (Exception e){
-                getLogger().log(Level.SEVERE, "保存团队背包数据时出错", e);
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("保存团队背包数据", e);
             }
 
         }
@@ -809,15 +778,16 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         if (databaseManager != null) {
             try {
                 databaseManager.close();
-                getLogger().info("数据库连接已关闭");
+                com.leeinx.xibackpack.util.LogManager.info("数据库连接已关闭");
             } catch (Exception e) {
-                getLogger().log(Level.SEVERE, "关闭数据库连接时出错", e);
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("关闭数据库连接", e);
             }
         }
         
         // 输出性能统计
-        getLogger().info("插件运行统计: 打开背包 " + totalBackpackOpens + " 次，数据库操作 " + totalDatabaseOperations + " 次");
+        com.leeinx.xibackpack.util.LogManager.info("插件运行统计: 打开背包 " + totalBackpackOpens + " 次，数据库操作 " + totalDatabaseOperations + " 次");
+        com.leeinx.xibackpack.util.LogManager.logStatistics();
 
-        getLogger().info(getMessage("plugin.disabled"));
+        com.leeinx.xibackpack.util.LogManager.info(getMessage("plugin.disabled"));
     }
 }
