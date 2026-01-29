@@ -259,14 +259,24 @@ public class ConfigManager {
      */
     public static int getInt(String path, int defaultValue) {
         if (cachedValues.containsKey(path)) {
-            return (int) cachedValues.get(path);
+            Object value = cachedValues.get(path);
+            if (value instanceof Integer) {
+                return (Integer) value;
+            } else if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
         }
 
         if (config.contains(path)) {
             return config.getInt(path);
         }
         if (defaultSuppliers.containsKey(path)) {
-            return (int) defaultSuppliers.get(path).get();
+            Object value = defaultSuppliers.get(path).get();
+            if (value instanceof Integer) {
+                return (Integer) value;
+            } else if (value instanceof Number) {
+                return ((Number) value).intValue();
+            }
         }
         return defaultValue;
     }
@@ -288,14 +298,24 @@ public class ConfigManager {
      */
     public static long getLong(String path, long defaultValue) {
         if (cachedValues.containsKey(path)) {
-            return (long) cachedValues.get(path);
+            Object value = cachedValues.get(path);
+            if (value instanceof Long) {
+                return (Long) value;
+            } else if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
         }
 
         if (config.contains(path)) {
             return config.getLong(path);
         }
         if (defaultSuppliers.containsKey(path)) {
-            return (long) defaultSuppliers.get(path).get();
+            Object value = defaultSuppliers.get(path).get();
+            if (value instanceof Long) {
+                return (Long) value;
+            } else if (value instanceof Number) {
+                return ((Number) value).longValue();
+            }
         }
         return defaultValue;
     }
@@ -317,14 +337,20 @@ public class ConfigManager {
      */
     public static boolean getBoolean(String path, boolean defaultValue) {
         if (cachedValues.containsKey(path)) {
-            return (boolean) cachedValues.get(path);
+            Object value = cachedValues.get(path);
+            if (value instanceof Boolean) {
+                return (Boolean) value;
+            }
         }
 
         if (config.contains(path)) {
             return config.getBoolean(path);
         }
         if (defaultSuppliers.containsKey(path)) {
-            return (boolean) defaultSuppliers.get(path).get();
+            Object value = defaultSuppliers.get(path).get();
+            if (value instanceof Boolean) {
+                return (Boolean) value;
+            }
         }
         return defaultValue;
     }
