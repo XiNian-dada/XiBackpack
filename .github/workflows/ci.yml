@@ -103,83 +103,62 @@ jobs:
     - name: 生成 Release Notes
       id: generate_release_notes
       if: steps.check_tag.outputs.exists == 'false'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          // 获取当前版本和tag
-          const version = '${{ steps.get_version.outputs.version }}';
-          const tagName = '${{ steps.get_version.outputs.tag_name }}';
-          
-          // 获取所有tags并排序
-          const tags = await github.rest.git.listMatchingRefs({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            ref: 'refs/tags/',
-            per_page: 100
-          });
-          
-          // 解析tag并按版本号排序（仅包含v开头的语义化版本）
-          const tagNames = tags.data.map(tag => tag.ref.replace('refs/tags/', ''))
-            .filter(tag => /^v\d+\.\d+\.\d+$/.test(tag))
-            .sort((a, b) => {
-              const parseVersion = (v) => v.slice(1).split('.').map(Number);
-              const aVer = parseVersion(a);
-              const bVer = parseVersion(b);
-              for (let i = 0; i < 3; i++) {
-                if (aVer[i] !== bVer[i]) {
-                  return bVer[i] - aVer[i];
-                }
-              }
-              return 0;
-            });
-          
-          // 找到当前tag的位置
-          const currentIndex = tagNames.indexOf(tagName);
-          let previousTag = null;
-          if (currentIndex < tagNames.length - 1) {
-            previousTag = tagNames[currentIndex + 1];
-          }
-          
-          // 获取commits
-          let commits = [];
-          if (previousTag) {
-            // 获取两个tag之间的commits
-            const compareResponse = await github.rest.repos.compareCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base: previousTag,
-              head: tagName
-            });
-            commits = compareResponse.data.commits;
-          } else {
-            // 如果是第一个tag，获取所有commits
-            const commitResponse = await github.rest.repos.listCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-            commits = commitResponse.data;
-          }
-          
-          // 生成Release Notes
-          let releaseNotes = `# XiBackpack ${version}\n\n`;
-          releaseNotes += `## 变更内容\n\n`;
-          
-          if (commits.length === 0) {
-            releaseNotes += `- 自上次发布以来没有变更\n`;
-          } else {
-            commits.forEach(commit => {
-              const commitMessage = commit.commit.message.split('\n')[0];
-              releaseNotes += `- ${commitMessage} (${commit.sha.substring(0, 7)})\n`;
-            });
-          }
-          
-          releaseNotes += `\n## 下载地址\n\n`;
-          releaseNotes += `- [XiBackpack-${version}.jar](https://github.com/${context.repo.owner}/${context.repo.repo}/releases/download/${tagName}/XiBackpack-${version}.jar)\n`;
-          
-          // 设置输出
-          core.setOutput('release_notes', releaseNotes);
-          core.setOutput('version', version);
+      run: |
+        # 获取当前版本和tag
+        VERSION='${{ steps.get_version.outputs.version }}'
+        TAG_NAME='${{ steps.get_version.outputs.tag_name }}'
+        
+        # 获取所有本地tags并按版本号排序（仅包含v开头的语义化版本）
+        TAG_NAMES=$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r)
+        
+        # 将tag列表转换为数组
+        IFS=$'\n' read -r -a TAG_ARRAY <<< "$TAG_NAMES"
+        
+        # 找到当前tag的位置
+        CURRENT_INDEX=-1
+        for i in "${!TAG_ARRAY[@]}"; do
+          if [[ "${TAG_ARRAY[$i]}" == "$TAG_NAME" ]]; then
+            CURRENT_INDEX=$i
+            break
+          fi
+        done
+        
+        # 查找前一个版本的tag
+        PREVIOUS_TAG=""
+        if [[ $CURRENT_INDEX -ne -1 && $CURRENT_INDEX -lt ${#TAG_ARRAY[@]}-1 ]]; then
+          PREVIOUS_TAG="${TAG_ARRAY[$CURRENT_INDEX+1]}"
+        fi
+        
+        # 获取commits
+        COMMITS=""
+        if [[ -n "$PREVIOUS_TAG" ]]; then
+          # 获取两个tag之间的commits
+          COMMITS=$(git log "$PREVIOUS_TAG..$TAG_NAME" --pretty=format:"%s (%h)")
+        else
+          # 如果是第一个tag，获取所有commits
+          COMMITS=$(git log --pretty=format:"%s (%h)")
+        fi
+        
+        # 生成Release Notes
+        RELEASE_NOTES="# XiBackpack $VERSION\n\n"
+        RELEASE_NOTES+="## 变更内容\n\n"
+        
+        if [[ -z "$COMMITS" ]]; then
+          RELEASE_NOTES+="- 自上次发布以来没有变更\n"
+        else
+          while IFS= read -r line; do
+            RELEASE_NOTES+="- $line\n"
+          done <<< "$COMMITS"
+        fi
+        
+        RELEASE_NOTES+="\n## 下载地址\n\n"
+        RELEASE_NOTES+="- [XiBackpack-${VERSION}.jar](https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/XiBackpack-${VERSION}.jar)\n"
+        
+        # 设置输出
+        echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$RELEASE_NOTES" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: 获取 JAR 文件名
       if: steps.check_tag.outputs.exists == 'false'
