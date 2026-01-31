@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.command;
 
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
+import com.leeinx.xibackpack.main.XiBackpack;
+import com.leeinx.xibackpack.backpack.PlayerBackpack;
+import com.leeinx.xibackpack.backpack.TeamBackpack;
 
 public class CommandHandler implements CommandExecutor {
     private XiBackpack plugin;
@@ -109,6 +112,10 @@ public class CommandHandler implements CommandExecutor {
                     } else if (args[0].equalsIgnoreCase("help")) {
                         // 显示帮助
                         showHelp(player);
+                        return true;
+                    } else if (args[0].equalsIgnoreCase("reload")) {
+                        // 重新加载配置文件
+                        reloadConfig(player);
                         return true;
                     } else {
                         // 未知子命令
@@ -618,9 +625,40 @@ public class CommandHandler implements CommandExecutor {
             player.sendMessage("§6/xibackpack team gui §7- 打开团队背包管理界面");
             player.sendMessage("§6/xibackpack team addmember <ID> <玩家名> §7- 添加成员到团队背包");
             player.sendMessage("§6/xibackpack team removemember <ID> <玩家名> §7- 从团队背包移除成员");
+            player.sendMessage("§6/xibackpack reload §7- 重新加载配置文件");
             player.sendMessage(plugin.getMessage("command.help_help"));
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "显示帮助信息时出错", e);
+        }
+    }
+    
+    /**
+     * 重新加载配置文件
+     * @param player 玩家
+     */
+    private void reloadConfig(Player player) {
+        if (player == null) {
+            plugin.getLogger().warning("尝试为null玩家重新加载配置");
+            return;
+        }
+        
+        try {
+            // 检查管理权限
+            if (!player.hasPermission("xibackpack.admin")) {
+                player.sendMessage("§c您没有权限执行此操作!");
+                return;
+            }
+            
+            // 调用ConfigManager的reloadConfig方法
+            com.leeinx.xibackpack.util.ConfigManager.reloadConfig();
+            
+            // 重新加载消息配置
+            plugin.reloadMessagesConfig();
+            
+            player.sendMessage("§a配置文件和消息配置已成功重新加载!");
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "重新加载配置文件时出错", e);
+            player.sendMessage("§c重新加载配置文件时发生错误，请联系管理员");
         }
     }
 

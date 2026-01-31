@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.handler;
 
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.Collections;
+import com.leeinx.xibackpack.main.XiBackpack;
+import com.leeinx.xibackpack.backpack.PlayerBackpack;
+import com.leeinx.xibackpack.holder.LoadingHolder;
 
 public class BackpackManager {
     private XiBackpack plugin;

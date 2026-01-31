@@ -6,7 +6,7 @@
 
   <groupId>com.leeinx</groupId>
   <artifactId>XiBackpack</artifactId>
-  <version>1.2.3</version>
+  <version>1.3.0</version>
   <packaging>jar</packaging>
 
   <name>XiBackpack</name>

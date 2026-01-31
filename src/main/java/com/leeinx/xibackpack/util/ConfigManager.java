@@ -1,6 +1,6 @@
 package com.leeinx.xibackpack.util;
 
-import com.leeinx.xibackpack.XiBackpack;
+import com.leeinx.xibackpack.main.XiBackpack;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 

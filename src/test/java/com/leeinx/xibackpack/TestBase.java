@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import be.seeseemelk.mockbukkit.MockBukkit;
 import be.seeseemelk.mockbukkit.ServerMock;
 import be.seeseemelk.mockbukkit.entity.PlayerMock;
+import com.leeinx.xibackpack.main.XiBackpack;
 
 public abstract class TestBase {
     protected ServerMock server;

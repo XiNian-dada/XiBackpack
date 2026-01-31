@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.backpack;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -8,6 +8,8 @@ import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import com.leeinx.xibackpack.NBTUtil;
+import com.leeinx.xibackpack.main.XiBackpack;
 import java.util.logging.Level;
 
 public class PlayerBackpack {

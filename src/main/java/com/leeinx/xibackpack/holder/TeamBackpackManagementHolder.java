@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.holder;
 
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;

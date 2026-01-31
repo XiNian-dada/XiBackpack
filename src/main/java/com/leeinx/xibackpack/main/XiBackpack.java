@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.main;
 
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Material;
@@ -28,6 +28,14 @@ import java.util.logging.Level;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.UUID;
+import com.leeinx.xibackpack.command.CommandHandler;
+import com.leeinx.xibackpack.handler.DatabaseManager;
+import com.leeinx.xibackpack.handler.BackpackManager;
+import com.leeinx.xibackpack.handler.TeamBackpackManager;
+import com.leeinx.xibackpack.backpack.PlayerBackpack;
+import com.leeinx.xibackpack.backpack.TeamBackpack;
+import com.leeinx.xibackpack.holder.LoadingHolder;
+import com.leeinx.xibackpack.holder.TeamBackpackManagementHolder;
 
 
 //TODO Multi upgrade method
@@ -600,6 +608,16 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "无法加载消息配置文件", e);
         }
+    }
+    
+    /**
+     * 重新加载消息配置
+     */
+    public void reloadMessagesConfig() {
+        loadMessagesConfig();
+        // 更新语言设置
+        language = com.leeinx.xibackpack.util.ConfigManager.getString("language");
+        getLogger().info("消息配置已重新加载");
     }
     //检测&加载相关附属前置的方法
     private boolean loadDependencies(){

@@ -1,7 +1,9 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.backpack;
 
 import org.bukkit.inventory.ItemStack;
 import java.util.*;
+import com.leeinx.xibackpack.NBTUtil;
+import com.leeinx.xibackpack.main.XiBackpack;
 
 public class TeamBackpack {
     private String id;

@@ -1,6 +1,6 @@
 package com.leeinx.xibackpack.util;
 
-import com.leeinx.xibackpack.XiBackpack;
+import com.leeinx.xibackpack.main.XiBackpack;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import java.util.HashMap;

@@ -1,6 +1,6 @@
 name: XiBackpack
 version: '${project.version}'
-main: com.leeinx.xibackpack.XiBackpack
+main: com.leeinx.xibackpack.main.XiBackpack
 api-version: '1.16'
 depend: [VaultAPI, NBTAPI]
 softdepend: ["PlaceholderAPI"]

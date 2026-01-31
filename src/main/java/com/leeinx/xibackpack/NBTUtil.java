@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.logging.Level;
+import com.leeinx.xibackpack.main.XiBackpack;
 
 public class NBTUtil {
 

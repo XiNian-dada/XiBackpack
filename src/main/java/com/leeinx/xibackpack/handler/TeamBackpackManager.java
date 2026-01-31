@@ -1,4 +1,4 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.handler;
 
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -6,7 +6,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
-import com.leeinx.xibackpack.TeamBackpackManagementHolder;
+import com.leeinx.xibackpack.holder.TeamBackpackManagementHolder;
+import com.leeinx.xibackpack.main.XiBackpack;
+import com.leeinx.xibackpack.backpack.TeamBackpack;
+import com.leeinx.xibackpack.holder.LoadingHolder;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;

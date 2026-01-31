@@ -1,8 +1,9 @@
-package com.leeinx.xibackpack;
+package com.leeinx.xibackpack.main;
 
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
 import org.bukkit.OfflinePlayer;
 import org.jetbrains.annotations.NotNull;
+import com.leeinx.xibackpack.backpack.PlayerBackpack;
 
 public class XiBackpackExpansion extends PlaceholderExpansion {
     private final XiBackpack plugin;
