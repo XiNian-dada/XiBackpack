@@ -1,0 +1,153 @@
+# English messages configuration
+
+# Plugin enable/disable messages
+plugin:
+  enabled: "&aXiBackpack plugin enabled"
+  disabled: "&cXiBackpack plugin disabled"
+
+# Command related messages
+command:
+  player_only: "&cThis command can only be executed by players"
+  help_header: "&e======= &6XiBackpack Help &e======="
+  help_open: "&e/backpack &7- Open personal cloud backpack"
+  help_upgrade: "&e/xibackpack upgrade &7- Upgrade personal backpack"
+  help_backup: "&e/xibackpack backup &7- Manage backpack backups"
+  help_team: "&e/xibackpack team &7- Manage team backpacks"
+  help_help: "&e/xibackpack help &7- Show this help message"
+
+# Backpack related messages
+backpack:
+  name: "&e&lCloud Backpack"
+  slot_locked: "&cLocked Slot"
+  slot_not_unlocked: "&cThis slot is not unlocked yet!"
+
+  # Pagination related
+  page_prev_first: "&7First Page"
+  page_prev: "&ePrevious Page &7(Page {page}/{total})"
+  page_next_last: "&7Last Page"
+  page_next: "&eNext Page &7(Page {page}/{total})"
+
+  # Info button
+  info_title: "&eBackpack Info"
+  info_capacity: "&7Capacity: &e{size} slots"
+  info_page: "&7Current Page: &ePage {page}"
+
+  # Upgrade related
+  economy_not_enabled: "&cEconomy system not available, unable to upgrade backpack"
+  upgrade_insufficient_funds: "&cInsufficient funds! Upgrading costs &e{cost} &ccoins"
+  upgrade_insufficient_exp: "&cInsufficient experience! Upgrading costs &e{cost} &cexperience"
+  upgrade_insufficient_permission: "&cInsufficient permissions! Upgrading to &e{size} &cslots requires permission &e{permission}"
+  upgrade_success: "&aBackpack upgraded successfully! Current capacity: &e{size} &aslots, cost: &e{cost} &acoins"
+  upgrade_success_exp: "&aBackpack upgraded successfully! Current capacity: &e{size} &aslots, cost: &e{cost} &cexperience"
+  upgrade_max_capacity: "&cBackpack has reached maximum capacity limit!"
+
+  # Loading related
+  loading_message: "&eLoading your personal backpack, please wait..."
+  loading_gui_title: "&0Loading data..."
+  loading_item_name: "&eLoading data..."
+  loading_item_lore: "&7Please wait, syncing with database..."
+  load_failed: "&cFailed to load personal backpack data, please contact an administrator."
+
+  # Backup related
+  backup_no_permission: "&cYou don't have permission to perform backup operations"
+  backup_created: "&aBackpack backup created successfully! Backup ID: &e{id}"
+  backup_create_failed: "&cFailed to create backpack backup"
+  backup_not_found: "&cBackup with ID &e{id} &cnot found"
+  backup_restored: "&aBackpack backup &e{id} &ahas been restored"
+  backup_help_header: "&e======= &6Backpack Backup Help &e======="
+  backup_help_create: "&e/xibackpack backup create &7- Create backpack backup"
+  backup_help_restore: "&e/xibackpack backup restore <ID> &7- Restore backpack backup"
+
+# Team backpack related messages
+team-backpack:
+  create_insufficient_funds: "&cInsufficient funds! Creating a team backpack costs &e{cost} &ccoins"
+  create_success: "&aTeam backpack '&e{name}&a' created successfully! ID: &e{id}&a, cost: &e{cost} &acoins"
+  no_permission: "&cYou don't have permission to access this team backpack"
+  not_found: "&cSpecified team backpack not found"
+  loading_message: "&dLoading team warehouse, please wait..."
+  loading_gui_title: "&0Team warehouse loading..."
+  loading_item_name: "&dTeam data syncing..."
+  loading_item_lore_line1: "&7Pulling shared warehouse from cloud"
+  loading_item_lore_line2: "&7Please wait..."
+  load_failed: "&cTeam backpack does not exist or failed to load."
+  open_error: "&cError opening team backpack page, please contact an administrator"
+
+# Database related messages
+database:
+  init_success: "&aDatabase initialized successfully"
+  init_failed: "&cDatabase initialization failed: {error}"
+  connection_failed: "&cDatabase connection failed: {error}"
+
+# Error related messages
+error:
+  command_failed: "&cError executing command, please contact an administrator"
+  backpack_operation_failed: "&cBackpack operation failed, please contact an administrator"
+  backup_operation_failed: "&cBackup operation failed, please contact an administrator"
+  no_permission: "&cYou don't have permission to perform this operation"
+
+# Log related messages
+log:
+  database_init: "Database initialization"
+  database_table_init: "Database table initialization"
+  database_table_init_failed: "Database table initialization failed: {error}"
+  database_connection_close_error: "Error closing database connection: {error}"
+  database_connection_pool_not_initialized: "Database connection pool not initialized"
+  database_connection_pool_closed: "Database connection pool closed"
+  database_operation_retry: "Database operation {operation} failed, attempting retry ({attempt}/{maxRetries}): {error}"
+  backpack_save_null_params: "Null parameters when saving backpack data: playerUUID={playerUUID}, backpackData={backpackData}"
+  backpack_load_null_uuid: "Null playerUUID when loading backpack data"
+  backup_save_null_params: "Null parameters when saving backup data: playerUUID={playerUUID}, backupId={backupId}"
+  backup_load_null_params: "Null parameters when loading backup data: playerUUID={playerUUID}, backupId={backupId}"
+  backup_count_null_uuid: "Null playerUUID when getting backup count"
+  backup_delete_oldest_null_uuid: "Null playerUUID when deleting oldest backup"
+  backup_delete_oldest_success: "Deleted oldest backup for player {playerUUID}"
+  backup_ids_null_uuid: "Null playerUUID when getting player backup IDs"
+  team_backpack_save_null_params: "Null parameters when saving team backpack data"
+  team_backpack_save_success: "Successfully saved team backpack {id}"
+  team_backpack_save_data_size: "Saving team backpack {id}, data size: {size}"
+  team_backpack_load_null_id: "Null backpackId when loading team backpack data"
+  team_backpack_load_data_size: "Loading team backpack {id}, data size: {size}"
+  team_backpack_load_success: "Successfully loaded team backpack {id}, item count: {itemCount}"
+  team_backpack_owned_null_uuid: "Null playerUUID when getting player-owned team backpacks"
+  team_backpack_joined_null_uuid: "Null playerUUID when getting player-joined team backpacks"
+  plugin_init_complete: "Plugin initialization completed, ready for use"
+  commands_registered: "Commands registered successfully"
+  commands_register_failed: "Failed to register commands"
+  events_registered: "Event listeners registered successfully"
+  events_register_failed: "Failed to register event listeners"
+  backpack_open: "Opening personal backpack"
+  player_backpack_saved: "Player {player}'s backpack data saved"
+  player_backpack_update: "Player {player}'s personal backpack updated"
+  team_backpack_update: "Player {player}'s team backpack updated"
+  team_backpack_create_success: "Successfully created team backpack: {name}"
+  team_backpack_create_failed: "Failed to create team backpack, please try again"
+  team_backpack_create_id: "Backpack ID: {id}"
+  team_backpack_no_permission_modify: "You don't have permission to modify this team backpack!"
+  lang_file_load_failed: "Current language file failed to load, trying to load English as default"
+  messages_config_loaded: "Message configuration loaded successfully, current language: {lang}"
+  messages_config_load_failed: "Failed to load message configuration file"
+  messages_config_loaded_en: "Loaded English default configuration"
+  messages_config_reloaded: "Message configuration reloaded"
+  test_environment: "Test environment, skipping dependency check"
+  papi_loaded: "Papi dependency loaded successfully!"
+  papi_load_failed: "Papi dependency load failed! Please check version!"
+  papi_load_error: "Unknown error occurred! Failed to load Papi dependency"
+  papi_not_found: "Papi dependency not found! Skipping registration!"
+  vault_loaded: "Vault dependency loaded successfully!"
+  vault_load_failed: "Vault dependency load failed! Please check version! Plugin will be disabled"
+  vault_load_error: "Unknown error occurred! Failed to load Vault dependency"
+  vault_not_found: "Vault dependency not found! Plugin will be disabled"
+  nbtapi_loaded: "NBTAPI dependency loaded successfully!"
+  nbtapi_load_error: "Unknown error occurred! Failed to load NBTAPI dependency"
+  nbtapi_not_found: "NBTAPI dependency not found! Plugin will be disabled"
+  message_not_found: "§cMessage not found: {path}"
+  cooldown_message: "§cPlease wait {time} seconds before opening backpack again!"
+  all_backpacks_saved: "All personal backpack data saved"
+  all_team_backpacks_saved: "All team backpack data saved"
+  database_connections_closed: "Database connections closed"
+  plugin_stats: "Plugin stats: Backpack opened {backpackOpens} times, Database operations {dbOperations} times"
+
+# Config related messages
+config:
+  monitor_started: "Configuration file monitor started"
+  monitor_error: "Configuration file monitor error: {error}"

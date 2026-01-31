@@ -13,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.logging.Level;
 
 public class DatabaseManager {
@@ -42,6 +43,11 @@ public class DatabaseManager {
             String username = com.leeinx.xibackpack.util.ConfigManager.getString("database.username", "");
             String password = com.leeinx.xibackpack.util.ConfigManager.getString("database.password", "");
 
+            // 检查是否为测试环境
+            boolean isTestEnvironment = plugin.isTestEnvironment();
+            // 测试环境使用更短的超时时间
+            long connectionTimeout = isTestEnvironment ? 5000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.connection-timeout", 30000);
+
             // 根据配置设置数据库连接信息
             switch (dbType.toLowerCase()) {
                 case "mysql":
@@ -60,9 +66,9 @@ public class DatabaseManager {
                     // SQLite特定配置
                     config.setMaximumPoolSize(1); // SQLite不支持多连接
                     config.setMinimumIdle(1);
-                    config.setConnectionTimeout(30000);
-                    config.setIdleTimeout(600000);
-                    config.setMaxLifetime(1800000);
+                    config.setConnectionTimeout(connectionTimeout);
+                    config.setIdleTimeout(isTestEnvironment ? 300000 : 600000);
+                    config.setMaxLifetime(isTestEnvironment ? 600000 : 1800000);
                     break;
                 default:
                     config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&serverTimezone=UTC");
@@ -75,9 +81,9 @@ public class DatabaseManager {
             if (!dbType.equalsIgnoreCase("sqlite")) {
                 config.setMaximumPoolSize(com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10));
                 config.setMinimumIdle(com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2));
-                config.setConnectionTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.connection-timeout", 30000));
-                config.setIdleTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
-                config.setMaxLifetime(com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
+                config.setConnectionTimeout(connectionTimeout);
+                config.setIdleTimeout(isTestEnvironment ? 300000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
+                config.setMaxLifetime(isTestEnvironment ? 600000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
             }
 
             // MySQL 特定配置
@@ -287,6 +293,51 @@ public class DatabaseManager {
             plugin.getLogger().info("数据库连接池已关闭");
         }
     }
+    
+    /**
+     * 执行带重试机制的数据库操作
+     * @param <T> 返回类型
+     * @param operation 数据库操作
+     * @param operationName 操作名称
+     * @return 操作结果
+     */
+    private <T> T executeWithRetry(Callable<T> operation, String operationName) {
+        int maxRetries = com.leeinx.xibackpack.util.ConfigManager.getInt("database.retry.max-attempts", 2);
+        long initialDelay = com.leeinx.xibackpack.util.ConfigManager.getLong("database.retry.initial-delay", 500);
+        long maxDelay = com.leeinx.xibackpack.util.ConfigManager.getLong("database.retry.max-delay", 2000);
+        
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return operation.call();
+            } catch (SQLException e) {
+                // 只对连接相关的异常进行重试
+                if (e.getMessage().contains("Connection") || e.getMessage().contains("connection") || 
+                    e.getMessage().contains("timeout") || e.getMessage().contains("Timeout")) {
+                    if (attempt < maxRetries) {
+                        long retryDelay = Math.min(initialDelay * attempt, maxDelay);
+                        plugin.getLogger().warning("数据库操作 " + operationName + " 失败，尝试重试 (" + attempt + "/" + maxRetries + "): " + e.getMessage());
+                        try {
+                            Thread.sleep(retryDelay); // 指数退避，但不超过最大延迟
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    } else {
+                        com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException(operationName, e);
+                    }
+                } else {
+                    // 其他SQL异常直接处理，不重试
+                    com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException(operationName, e);
+                    break;
+                }
+            } catch (Exception e) {
+                // 其他异常直接处理，不重试
+                com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException(operationName, e);
+                break;
+            }
+        }
+        return null;
+    }
 
     /**
      * 保存玩家背包数据到数据库
@@ -300,47 +351,46 @@ public class DatabaseManager {
             return false;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 获取数据库类型
-            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
-            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
-            
-            if (isSQLite) {
-                // SQLite使用UPSERT语法
-                String sql = "INSERT OR REPLACE INTO player_backpacks (player_uuid, backpack_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)";
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, playerUUID.toString());
-                    stmt.setString(2, backpackData);
-                    stmt.executeUpdate();
-                    return true;
-                }
-            } else {
-                // 其他数据库使用ON DUPLICATE KEY UPDATE
-                String sql = "INSERT INTO player_backpacks (player_uuid, backpack_data) VALUES (?, ?) " +
-                             "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
                 
-                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                    stmt.setString(1, playerUUID.toString());
-                    stmt.setString(2, backpackData);
-                    stmt.executeUpdate();
-                    return true;
+                // 获取数据库类型
+                String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+                boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+                
+                if (isSQLite) {
+                    // SQLite使用UPSERT语法
+                    String sql = "INSERT OR REPLACE INTO player_backpacks (player_uuid, backpack_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)";
+                    try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                        stmt.setString(1, playerUUID.toString());
+                        stmt.setString(2, backpackData);
+                        stmt.executeUpdate();
+                        return true;
+                    }
+                } else {
+                    // 其他数据库使用ON DUPLICATE KEY UPDATE
+                    String sql = "INSERT INTO player_backpacks (player_uuid, backpack_data) VALUES (?, ?) " +
+                                 "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+                    
+                    try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                        stmt.setString(1, playerUUID.toString());
+                        stmt.setString(2, backpackData);
+                        stmt.executeUpdate();
+                        return true;
+                    }
+                }
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+                    }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存玩家背包数据", e);
-            return false;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
+        }, "保存玩家背包数据");
     }
 
     /**
@@ -354,32 +404,32 @@ public class DatabaseManager {
             return null;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            String sql = "SELECT backpack_data FROM player_backpacks WHERE player_uuid = ?";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                String sql = "SELECT backpack_data FROM player_backpacks WHERE player_uuid = ?";
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getString("backpack_data");
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            return rs.getString("backpack_data");
+                        }
+                    }
+                }
+                return null;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                     }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载玩家背包数据", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
-        return null;
+        }, "加载玩家背包数据");
     }
     
     /**
@@ -395,52 +445,59 @@ public class DatabaseManager {
             return false;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查备份数量限制
-            if (getBackupCount(playerUUID) >= com.leeinx.xibackpack.util.ConfigManager.getInt("backpack.backup.max-count")) {
-                // 删除最旧的备份
-                deleteOldestBackup(playerUUID);
-            }
-            
-            // 获取数据库类型
-            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
-            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
-            
-            String sql;
-            if (isSQLite) {
-                // SQLite使用UPSERT语法
-                sql = "INSERT OR REPLACE INTO player_backpack_backups (player_uuid, backup_id, backpack_data, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
-            } else {
-                // 其他数据库使用ON DUPLICATE KEY UPDATE
-                sql = "INSERT INTO player_backpack_backups (player_uuid, backup_id, backpack_data) VALUES (?, ?, ?) " +
-                      "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data)";
-            }
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
-                stmt.setString(2, backupId);
-                stmt.setString(3, backpackData);
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                
+                // 获取备份数量限制
+                int maxBackupCount = com.leeinx.xibackpack.util.ConfigManager.getInt("backpack.backup.max-count", 10);
+                if (maxBackupCount < 1) {
+                    maxBackupCount = 10; // 设置默认值
+                }
+                
+                // 检查备份数量限制
+                int currentBackupCount = getBackupCount(playerUUID);
+                if (currentBackupCount >= maxBackupCount) {
+                    // 计算需要删除的备份数量
+                    int backupsToDelete = currentBackupCount - maxBackupCount + 1;
+                    // 删除最旧的备份
+                    for (int i = 0; i < backupsToDelete; i++) {
+                        deleteOldestBackup(playerUUID);
+                    }
+                }
+                
+                // 获取数据库类型
+                String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+                boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+                
+                String sql;
                 if (isSQLite) {
-                    // SQLite不需要设置created_at参数，使用默认值
+                    // SQLite使用UPSERT语法
+                    sql = "INSERT OR REPLACE INTO player_backpack_backups (player_uuid, backup_id, backpack_data, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
+                } else {
+                    // 其他数据库使用ON DUPLICATE KEY UPDATE
+                    sql = "INSERT INTO player_backpack_backups (player_uuid, backup_id, backpack_data) VALUES (?, ?, ?) " +
+                          "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data), created_at = CURRENT_TIMESTAMP";
                 }
-                stmt.executeUpdate();
-                return true;
-            }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存玩家背包备份数据", e);
-            return false;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    stmt.setString(2, backupId);
+                    stmt.setString(3, backpackData);
+                    stmt.executeUpdate();
+                    return true;
+                }
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+                    }
                 }
             }
-        }
+        }, "保存玩家背包备份数据");
     }
     
     /**
@@ -455,33 +512,33 @@ public class DatabaseManager {
             return null;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            String sql = "SELECT backpack_data FROM player_backpack_backups WHERE player_uuid = ? AND backup_id = ?";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
-                stmt.setString(2, backupId);
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                String sql = "SELECT backpack_data FROM player_backpack_backups WHERE player_uuid = ? AND backup_id = ?";
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getString("backpack_data");
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    stmt.setString(2, backupId);
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            return rs.getString("backpack_data");
+                        }
+                    }
+                }
+                return null;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                     }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载玩家背包备份数据", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
-        return null;
+        }, "加载玩家背包备份数据");
     }
     
     /**
@@ -495,32 +552,34 @@ public class DatabaseManager {
             return 0;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            String sql = "SELECT COUNT(*) as count FROM player_backpack_backups WHERE player_uuid = ?";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
+        Integer result = executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                String sql = "SELECT COUNT(*) as count FROM player_backpack_backups WHERE player_uuid = ?";
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getInt("count");
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            return rs.getInt("count");
+                        }
+                    }
+                }
+                return 0;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                     }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("获取玩家备份数量", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
-        return 0;
+        }, "获取玩家备份数量");
+        
+        return result != null ? result : 0;
     }
     
     /**
@@ -533,29 +592,30 @@ public class DatabaseManager {
             return;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            String sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at ASC LIMIT 1";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
-                int deleted = stmt.executeUpdate();
-                if (deleted > 0) {
-                    com.leeinx.xibackpack.util.LogManager.info("已删除玩家 %s 的最旧备份", playerUUID);
+        executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                String sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at ASC LIMIT 1";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    int deleted = stmt.executeUpdate();
+                    if (deleted > 0) {
+                        com.leeinx.xibackpack.util.LogManager.info("已删除玩家 %s 的最旧备份", playerUUID);
+                    }
+                }
+                return true;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+                    }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("删除最旧备份", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
+        }, "删除最旧备份");
     }
     
     /**
@@ -570,32 +630,35 @@ public class DatabaseManager {
             return backupIds;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            String sql = "SELECT backup_id FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at DESC";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
+        List<String> result = executeWithRetry(() -> {
+            List<String> ids = new ArrayList<>();
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                String sql = "SELECT backup_id FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at DESC";
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        backupIds.add(rs.getString("backup_id"));
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            ids.add(rs.getString("backup_id"));
+                        }
+                    }
+                }
+                return ids;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                     }
                 }
             }
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("获取玩家备份ID列表", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
-        return backupIds;
+        }, "获取玩家备份ID列表");
+        
+        return result != null ? result : backupIds;
     }
     
     /**
@@ -609,60 +672,59 @@ public class DatabaseManager {
             return false;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，直接返回true
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                
+                // 检查是否为测试环境（connection为null表示在测试环境中）
+                if (connection == null) {
+                    // 测试环境，直接返回true
+                    return true;
+                }
+                
+                // 保存背包基本信息
+                String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+                boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+                
+                String sql;
+                if (isSQLite) {
+                    // SQLite使用UPSERT语法
+                    sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+                } else {
+                    // 其他数据库使用ON DUPLICATE KEY UPDATE
+                    sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+                             "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+                }
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, backpack.getId());
+                    stmt.setString(2, backpack.getName());
+                    stmt.setString(3, backpack.getOwner().toString());
+                    
+                    // 序列化背包数据（使用复用的个人背包序列化方法）
+                    String backpackData = backpack.serialize();
+                    com.leeinx.xibackpack.util.LogManager.info("正在保存团队背包 %s，数据大小: %d", backpack.getId(), backpackData.length());
+                    stmt.setString(4, backpackData);
+                    
+                    stmt.executeUpdate();
+                }
+                
+                // 保存成员信息
+                saveTeamBackpackMembers(connection, backpack);
+                
+                com.leeinx.xibackpack.util.LogManager.info("成功保存团队背包 %s", backpack.getId());
                 return true;
-            }
-            
-            // 保存背包基本信息
-            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
-            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
-            
-            String sql;
-            if (isSQLite) {
-                // SQLite使用UPSERT语法
-                sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
-            } else {
-                // 其他数据库使用ON DUPLICATE KEY UPDATE
-                sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
-                         "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
-            }
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, backpack.getId());
-                stmt.setString(2, backpack.getName());
-                stmt.setString(3, backpack.getOwner().toString());
-                
-                // 序列化背包数据（使用复用的个人背包序列化方法）
-                String backpackData = backpack.serialize();
-                com.leeinx.xibackpack.util.LogManager.info("正在保存团队背包 %s，数据大小: %d", backpack.getId(), backpackData.length());
-                stmt.setString(4, backpackData);
-                
-                stmt.executeUpdate();
-            }
-            
-            // 保存成员信息
-            saveTeamBackpackMembers(connection, backpack);
-            
-            com.leeinx.xibackpack.util.LogManager.info("成功保存团队背包 %s", backpack.getId());
-            return true;
-        } catch (SQLException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存团队背包数据", e);
-            return false;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
+                    }
                 }
             }
-        }
+        }, "保存团队背包数据");
     }
     
     /**
@@ -725,53 +787,53 @@ public class DatabaseManager {
             return null;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，返回一个空的TeamBackpack对象
-                return new TeamBackpack(backpackId, UUID.randomUUID(), backpackId);
-            }
-            
-            // 查询背包基本信息
-            String sql = "SELECT name, owner_uuid, backpack_data FROM team_backpacks WHERE id = ?";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, backpackId);
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    if (rs.next()) {
-                        String name = rs.getString("name");
-                        UUID ownerUUID = UUID.fromString(rs.getString("owner_uuid"));
-                        String backpackData = rs.getString("backpack_data");
-                        
-                        com.leeinx.xibackpack.util.LogManager.info("正在加载团队背包 %s，数据大小: %d", backpackId, (backpackData != null ? backpackData.length() : 0));
-                        
-                        // 使用TeamBackpack自身的反序列化方法（复用个人背包的反序列化逻辑）
-                        TeamBackpack backpack = TeamBackpack.deserialize(backpackData, backpackId, name, ownerUUID);
-                        
-                        // 加载成员信息
-                        loadTeamBackpackMembers(connection, backpack);
-                        
-                        com.leeinx.xibackpack.util.LogManager.info("成功加载团队背包 %s，物品数量: %d", backpackId, backpack.getItems().size());
-                        return backpack;
+                // 检查是否为测试环境（connection为null表示在测试环境中）
+                if (connection == null) {
+                    // 测试环境，返回一个空的TeamBackpack对象
+                    return new TeamBackpack(backpackId, UUID.randomUUID(), backpackId);
+                }
+                
+                // 查询背包基本信息
+                String sql = "SELECT name, owner_uuid, backpack_data FROM team_backpacks WHERE id = ?";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, backpackId);
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        if (rs.next()) {
+                            String name = rs.getString("name");
+                            UUID ownerUUID = UUID.fromString(rs.getString("owner_uuid"));
+                            String backpackData = rs.getString("backpack_data");
+                            
+                            com.leeinx.xibackpack.util.LogManager.info("正在加载团队背包 %s，数据大小: %d", backpackId, (backpackData != null ? backpackData.length() : 0));
+                            
+                            // 使用TeamBackpack自身的反序列化方法（复用个人背包的反序列化逻辑）
+                            TeamBackpack backpack = TeamBackpack.deserialize(backpackData, backpackId, name, ownerUUID);
+                            
+                            // 加载成员信息
+                            loadTeamBackpackMembers(connection, backpack);
+                            
+                            com.leeinx.xibackpack.util.LogManager.info("成功加载团队背包 %s，物品数量: %d", backpackId, backpack.getItems().size());
+                            return backpack;
+                        }
+                    }
+                }
+                return null;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
                     }
                 }
             }
-        } catch (SQLException | IllegalArgumentException e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("加载团队背包数据", e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    com.leeinx.xibackpack.util.LogManager.warning("关闭数据库连接时出错: %s", e.getMessage());
-                }
-            }
-        }
-        return null;
+        }, "加载团队背包数据");
     }
     
     /**
@@ -786,41 +848,44 @@ public class DatabaseManager {
             return backpackIds;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，直接返回空列表
-                return backpackIds;
-            }
-            
-            String sql = "SELECT tb.id FROM team_backpacks tb " +
-                         "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
-                         "WHERE tbm.player_uuid = ? AND tbm.role = 'OWNER'";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
+        List<String> result = executeWithRetry(() -> {
+            List<String> ids = new ArrayList<>();
+            Connection connection = null;
+            try {
+                connection = getConnection();
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        backpackIds.add(rs.getString("id"));
+                // 检查是否为测试环境（connection为null表示在测试环境中）
+                if (connection == null) {
+                    // 测试环境，直接返回空列表
+                    return ids;
+                }
+                
+                String sql = "SELECT tb.id FROM team_backpacks tb " +
+                             "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
+                             "WHERE tbm.player_uuid = ? AND tbm.role = 'OWNER'";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            ids.add(rs.getString("id"));
+                        }
+                    }
+                }
+                return ids;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                     }
                 }
             }
-        } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "获取玩家拥有的团队背包失败: " + e.getMessage(), e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
-                }
-            }
-        }
-        return backpackIds;
+        }, "获取玩家拥有的团队背包");
+        
+        return result != null ? result : backpackIds;
     }
     
     /**
@@ -835,41 +900,44 @@ public class DatabaseManager {
             return backpackIds;
         }
         
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，直接返回空列表
-                return backpackIds;
-            }
-            
-            String sql = "SELECT DISTINCT tb.id FROM team_backpacks tb " +
-                         "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
-                         "WHERE tbm.player_uuid = ?";
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
+        List<String> result = executeWithRetry(() -> {
+            List<String> ids = new ArrayList<>();
+            Connection connection = null;
+            try {
+                connection = getConnection();
                 
-                try (ResultSet rs = stmt.executeQuery()) {
-                    while (rs.next()) {
-                        backpackIds.add(rs.getString("id"));
+                // 检查是否为测试环境（connection为null表示在测试环境中）
+                if (connection == null) {
+                    // 测试环境，直接返回空列表
+                    return ids;
+                }
+                
+                String sql = "SELECT DISTINCT tb.id FROM team_backpacks tb " +
+                             "JOIN team_backpack_members tbm ON tb.id = tbm.backpack_id " +
+                             "WHERE tbm.player_uuid = ?";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    
+                    try (ResultSet rs = stmt.executeQuery()) {
+                        while (rs.next()) {
+                            ids.add(rs.getString("id"));
+                        }
+                    }
+                }
+                return ids;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
                     }
                 }
             }
-        } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "获取玩家参与的团队背包失败: " + e.getMessage(), e);
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    plugin.getLogger().log(Level.WARNING, "关闭数据库连接时出错: " + e.getMessage(), e);
-                }
-            }
-        }
-        return backpackIds;
+        }, "获取玩家参与的团队背包");
+        
+        return result != null ? result : backpackIds;
     }
     /**
      * 此方法专门用于在异步线程中调用
@@ -884,73 +952,72 @@ public class DatabaseManager {
     public boolean saveTeamBackpackData(String id, String name, UUID ownerUUID, String jsonBackpackData, Set<UUID> membersSnapshot) {
         if (id == null || jsonBackpackData == null) return false;
 
-        Connection connection = null;
-        try {
-            connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，直接返回true
-                return true;
-            }
+        return executeWithRetry(() -> {
+            Connection connection = null;
+            try {
+                connection = getConnection();
+                
+                // 检查是否为测试环境（connection为null表示在测试环境中）
+                if (connection == null) {
+                    // 测试环境，直接返回true
+                    return true;
+                }
 
-            // 1. 保存背包基本信息
-            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
-            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
-            
-            String sql;
-            if (isSQLite) {
-                // SQLite使用UPSERT语法
-                sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
-            } else {
-                // 其他数据库使用ON DUPLICATE KEY UPDATE
-                sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
-                        "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
-            }
+                // 1. 保存背包基本信息
+                String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+                boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+                
+                String sql;
+                if (isSQLite) {
+                    // SQLite使用UPSERT语法
+                    sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+                } else {
+                    // 其他数据库使用ON DUPLICATE KEY UPDATE
+                    sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+                            "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+                }
 
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, id);
-                stmt.setString(2, name);
-                stmt.setString(3, ownerUUID.toString());
-                stmt.setString(4, jsonBackpackData); // 使用传入的JSON字符串
-                stmt.executeUpdate();
-            }
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, id);
+                    stmt.setString(2, name);
+                    stmt.setString(3, ownerUUID.toString());
+                    stmt.setString(4, jsonBackpackData); // 使用传入的JSON字符串
+                    stmt.executeUpdate();
+                }
 
-            // 2. 保存成员信息 (使用传入的快照，不读取 backpack 对象)
-            // 先删除旧成员
-            String deleteSql = "DELETE FROM team_backpack_members WHERE backpack_id = ?";
-            try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
-                deleteStmt.setString(1, id);
-                deleteStmt.executeUpdate();
-            }
+                // 2. 保存成员信息 (使用传入的快照，不读取 backpack 对象)
+                // 先删除旧成员
+                String deleteSql = "DELETE FROM team_backpack_members WHERE backpack_id = ?";
+                try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
+                    deleteStmt.setString(1, id);
+                    deleteStmt.executeUpdate();
+                }
 
-            // 插入新成员
-            if (membersSnapshot != null && !membersSnapshot.isEmpty()) {
-                String insertSql = "INSERT INTO team_backpack_members (backpack_id, player_uuid, role) VALUES (?, ?, ?)";
-                try (PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
-                    for (UUID memberUUID : membersSnapshot) {
-                        insertStmt.setString(1, id);
-                        insertStmt.setString(2, memberUUID.toString());
-                        // 简单的判断逻辑：如果成员ID等于所有者ID，就是OWNER
-                        insertStmt.setString(3, ownerUUID.equals(memberUUID) ? "OWNER" : "MEMBER");
-                        insertStmt.addBatch();
+                // 插入新成员
+                if (membersSnapshot != null && !membersSnapshot.isEmpty()) {
+                    String insertSql = "INSERT INTO team_backpack_members (backpack_id, player_uuid, role) VALUES (?, ?, ?)";
+                    try (PreparedStatement insertStmt = connection.prepareStatement(insertSql)) {
+                        for (UUID memberUUID : membersSnapshot) {
+                            insertStmt.setString(1, id);
+                            insertStmt.setString(2, memberUUID.toString());
+                            // 简单的判断逻辑：如果成员ID等于所有者ID，就是OWNER
+                            insertStmt.setString(3, ownerUUID.equals(memberUUID) ? "OWNER" : "MEMBER");
+                            insertStmt.addBatch();
+                        }
+                        insertStmt.executeBatch();
                     }
-                    insertStmt.executeBatch();
                 }
-            }
 
-            return true;
-        } catch (SQLException e) {
-            plugin.getLogger().log(Level.SEVERE, "保存团队背包数据失败: " + e.getMessage(), e);
-            return false;
-        } finally {
-            if (connection != null) {
-                try {
-                    connection.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
+                return true;
+            } finally {
+                if (connection != null) {
+                    try {
+                        connection.close();
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
-        }
+        }, "保存团队背包数据（异步）");
     }
 }

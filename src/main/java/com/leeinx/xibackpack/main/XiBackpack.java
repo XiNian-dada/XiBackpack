@@ -26,9 +26,10 @@ import java.io.InputStreamReader;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import com.leeinx.xibackpack.command.CommandHandler;
+import com.leeinx.xibackpack.command.CommandCompleter;
 import com.leeinx.xibackpack.handler.DatabaseManager;
 import com.leeinx.xibackpack.handler.BackpackManager;
 import com.leeinx.xibackpack.handler.TeamBackpackManager;
@@ -142,10 +143,10 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     private FileConfiguration messagesConfig;
     private String language;
     // 冷却时间记录
-    private Map<UUID, Long> cooldowns = new HashMap<>();
+    private Map<UUID, Long> cooldowns = new ConcurrentHashMap<>();
     
     // 添加用于跟踪玩家创建团队背包状态的Map
-    private Map<UUID, Boolean> playerCreatingTeamBackpack = new HashMap<>();
+    private Map<UUID, Boolean> playerCreatingTeamBackpack = new ConcurrentHashMap<>();
     
     /**
      * 插件构造函数，用于MockBukkit实例化
@@ -259,10 +260,13 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     }
 
     private void registerCommands() {
-        // 注册命令执行器
+        // 注册命令执行器和补全器
         try {
+            CommandCompleter commandCompleter = new CommandCompleter(this);
             Objects.requireNonNull(this.getCommand("backpack")).setExecutor(this);
+            Objects.requireNonNull(this.getCommand("backpack")).setTabCompleter(commandCompleter);
             Objects.requireNonNull(this.getCommand("xibackpack")).setExecutor(commandHandler);
+            Objects.requireNonNull(this.getCommand("xibackpack")).setTabCompleter(commandCompleter);
             getLogger().info("命令注册完成");
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "命令注册失败", e);
@@ -589,23 +593,57 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     
     // 消息配置相关方法
     private void loadMessagesConfig() {
-        File messagesFile = new File(getDataFolder(), "messages.yml");
-        if (!messagesFile.exists()) {
-            saveResource("messages.yml", false);
+        // 获取语言设置
+        String lang = com.leeinx.xibackpack.util.ConfigManager.getString("language", "zh_cn");
+        
+        // 构建语言文件路径
+        String langFileName = lang + ".yml";
+        File langFile = new File(getDataFolder() + File.separator + "languages", langFileName);
+        
+        // 确保 languages 文件夹存在
+        File languagesFolder = new File(getDataFolder(), "languages");
+        if (!languagesFolder.exists()) {
+            languagesFolder.mkdirs();
+        }
+        
+        // 复制默认语言文件
+        if (!langFile.exists()) {
+            saveResource("languages/" + langFileName, false);
         }
         
         try {
-            messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
+            messagesConfig = YamlConfiguration.loadConfiguration(langFile);
             
-            // 加载默认消息配置
-            InputStream defaultMessagesStream = getResource("messages.yml");
-            if (defaultMessagesStream != null) {
-                YamlConfiguration defaultMessagesConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultMessagesStream));
-                messagesConfig.setDefaults(defaultMessagesConfig);
+            // 加载默认消息配置作为fallback
+            InputStream defaultLangStream = getResource("languages/" + langFileName);
+            if (defaultLangStream != null) {
+                YamlConfiguration defaultLangConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultLangStream));
+                messagesConfig.setDefaults(defaultLangConfig);
             }
-            getLogger().info("消息配置加载完成");
+            
+            // 如果当前语言文件加载失败，尝试加载英文作为默认
+            if (messagesConfig == null || messagesConfig.getKeys(false).isEmpty()) {
+                getLogger().warning("当前语言文件加载失败，尝试加载英文作为默认");
+                File enFile = new File(getDataFolder() + File.separator + "languages", "en.yml");
+                if (!enFile.exists()) {
+                    saveResource("languages/en.yml", false);
+                }
+                messagesConfig = YamlConfiguration.loadConfiguration(enFile);
+            }
+            
+            getLogger().info("消息配置加载完成，当前语言: " + lang);
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "无法加载消息配置文件", e);
+            // 尝试加载英文作为默认
+            try {
+                InputStream enStream = getResource("languages/en.yml");
+                if (enStream != null) {
+                    messagesConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(enStream));
+                    getLogger().info("已加载英文默认配置");
+                }
+            } catch (Exception ex) {
+                getLogger().log(Level.SEVERE, "无法加载默认英文配置", ex);
+            }
         }
     }
     
@@ -682,15 +720,15 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     }
     
     public String getMessage(String path) {
-        // 使用配置中的语言设置
-        String message = messagesConfig.getString(language + "." + path, "§c消息未找到: " + path);
+        // 直接从语言文件中获取消息
+        String message = messagesConfig.getString(path, "§c消息未找到: " + path);
         // 将 & 符号替换为 § 符号以支持颜色代码
         return message.replace('&', '§');
     }
     
     public String getMessage(String path, String defaultValue) {
-        // 使用配置中的语言设置，提供默认值
-        String message = messagesConfig.getString(language + "." + path, defaultValue);
+        // 直接从语言文件中获取消息，提供默认值
+        String message = messagesConfig.getString(path, defaultValue);
         // 将 & 符号替换为 § 符号以支持颜色代码
         return message.replace('&', '§');
     }

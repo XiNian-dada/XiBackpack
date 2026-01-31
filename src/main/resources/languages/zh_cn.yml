@@ -1,0 +1,153 @@
+# 中文消息配置
+
+# 插件启用/禁用消息
+plugin:
+  enabled: "&aXiBackpack插件已启用"
+  disabled: "&cXiBackpack插件已禁用"
+
+# 命令相关消息
+command:
+  player_only: "&c此命令只能由玩家执行"
+  help_header: "&e======= &6XiBackpack 帮助 &e======="
+  help_open: "&e/backpack &7- 打开个人云背包"
+  help_upgrade: "&e/xibackpack upgrade &7- 升级个人背包"
+  help_backup: "&e/xibackpack backup &7- 管理背包备份"
+  help_team: "&e/xibackpack team &7- 管理团队背包"
+  help_help: "&e/xibackpack help &7- 显示此帮助信息"
+
+# 背包相关消息
+backpack:
+  name: "&e&l云上背包"
+  slot_locked: "&c锁定槽位"
+  slot_not_unlocked: "&c此槽位尚未解锁!"
+  
+  # 分页相关
+  page_prev_first: "&7第一页"
+  page_prev: "&e上一页 &7(第{page}页/共{total}页)"
+  page_next_last: "&7最后一页"
+  page_next: "&e下一页 &7(第{page}页/共{total}页)"
+  
+  # 信息按钮
+  info_title: "&e背包信息"
+  info_capacity: "&7容量: &e{size} 格"
+  info_page: "&7当前页: &e第{page}页"
+  
+  # 升级相关
+  economy_not_enabled: "&c经济系统不可用，无法升级背包"
+  upgrade_insufficient_funds: "&c金币不足! 升级需要 &e{cost} &c金币"
+  upgrade_insufficient_exp: "&c经验不足! 升级需要 &e{cost} &c经验"
+  upgrade_insufficient_permission: "&c权限不足! 升级到 &e{size} &c格需要权限 &e{permission}"
+  upgrade_success: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a金币"
+  upgrade_success_exp: "&a背包升级成功! 当前容量: &e{size} &a格，花费: &e{cost} &a经验"
+  upgrade_max_capacity: "&c背包已达到最大容量限制!"
+
+  #加载相关
+  loading_message: "&e正在加载您的个人背包，请稍候..."
+  loading_gui_title: "&0正在加载数据..."
+  loading_item_name: "&e数据加载中..."
+  loading_item_lore: "&7请稍候，正在同步数据库..."
+  load_failed: "&c加载个人背包数据失败，请联系管理员。"
+  
+  # 备份相关
+  backup_no_permission: "&c您没有权限执行备份操作"
+  backup_created: "&a背包备份创建成功! 备份ID: &e{id}"
+  backup_create_failed: "&c创建背包备份失败"
+  backup_not_found: "&c找不到ID为 &e{id} &c的备份"
+  backup_restored: "&a背包备份 &e{id} &a已恢复"
+  backup_help_header: "&e======= &6背包备份帮助 &e======="
+  backup_help_create: "&e/xibackpack backup create &7- 创建背包备份"
+  backup_help_restore: "&e/xibackpack backup restore <ID> &7- 恢复背包备份"
+
+# 团队背包相关消息
+team-backpack:
+  create_insufficient_funds: "&c金币不足! 创建团队背包需要 &e{cost} &c金币"
+  create_success: "&a团队背包 '&e{name}&a' 创建成功! ID: &e{id}&a，花费: &e{cost} &a金币"
+  no_permission: "&c您没有权限访问此团队背包"
+  not_found: "&c找不到指定的团队背包"
+  loading_message: "&d正在加载团队仓库，请稍候..."
+  loading_gui_title: "&0团队仓库加载中..."
+  loading_item_name: "&d团队数据同步中..."
+  loading_item_lore_line1: "&7正在从云端拉取共享仓库"
+  loading_item_lore_line2: "&7请稍候..."
+  load_failed: "&c团队背包不存在或加载失败。"
+  open_error: "&c打开团队背包页面时发生错误，请联系管理员"
+
+# 数据库相关消息
+database:
+  init_success: "&a数据库初始化成功"
+  init_failed: "&c数据库初始化失败: {error}"
+  connection_failed: "&c数据库连接失败: {error}"
+
+# 错误相关消息
+error:
+  command_failed: "&c执行命令时发生错误，请联系管理员"
+  backpack_operation_failed: "&c背包操作失败，请联系管理员"
+  backup_operation_failed: "&c备份操作失败，请联系管理员"
+  no_permission: "&c您没有执行此操作的权限"
+
+# 日志相关消息
+log:
+  database_init: "数据库初始化"
+  database_table_init: "数据库表初始化"
+  database_table_init_failed: "数据库表初始化失败: {error}"
+  database_connection_close_error: "关闭数据库连接时出错: {error}"
+  database_connection_pool_not_initialized: "数据库连接池未初始化"
+  database_connection_pool_closed: "数据库连接池已关闭"
+  database_operation_retry: "数据库操作 {operation} 失败，尝试重试 ({attempt}/{maxRetries}): {error}"
+  backpack_save_null_params: "保存背包数据时参数为空: playerUUID={playerUUID}, backpackData={backpackData}"
+  backpack_load_null_uuid: "加载背包数据时playerUUID为空"
+  backup_save_null_params: "保存背包备份数据时参数为空: playerUUID={playerUUID}, backupId={backupId}"
+  backup_load_null_params: "加载背包备份数据时参数为空: playerUUID={playerUUID}, backupId={backupId}"
+  backup_count_null_uuid: "获取备份数量时playerUUID为空"
+  backup_delete_oldest_null_uuid: "删除最旧备份时playerUUID为空"
+  backup_delete_oldest_success: "已删除玩家 {playerUUID} 的最旧备份"
+  backup_ids_null_uuid: "获取玩家备份ID列表时playerUUID为空"
+  team_backpack_save_null_params: "保存团队背包数据时参数为空"
+  team_backpack_save_success: "成功保存团队背包 {id}"
+  team_backpack_save_data_size: "正在保存团队背包 {id}，数据大小: {size}"
+  team_backpack_load_null_id: "加载团队背包数据时backpackId为空"
+  team_backpack_load_data_size: "正在加载团队背包 {id}，数据大小: {size}"
+  team_backpack_load_success: "成功加载团队背包 {id}，物品数量: {itemCount}"
+  team_backpack_owned_null_uuid: "获取玩家拥有的团队背包时playerUUID为空"
+  team_backpack_joined_null_uuid: "获取玩家参与的团队背包时playerUUID为空"
+  plugin_init_complete: "插件初始化完成，准备就绪"
+  commands_registered: "命令注册完成"
+  commands_register_failed: "命令注册失败"
+  events_registered: "事件监听器注册完成"
+  events_register_failed: "事件监听器注册失败"
+  backpack_open: "打开个人背包"
+  player_backpack_saved: "玩家 {player} 的背包数据已保存"
+  player_backpack_update: "玩家 {player} 的个人背包已更新"
+  team_backpack_update: "玩家 {player} 的团队背包已更新"
+  team_backpack_create_success: "成功创建团队背包: {name}"
+  team_backpack_create_failed: "创建团队背包失败，请重试"
+  team_backpack_create_id: "背包ID: {id}"
+  team_backpack_no_permission_modify: "您没有权限修改此团队背包的内容！"
+  lang_file_load_failed: "当前语言文件加载失败，尝试加载英文作为默认"
+  messages_config_loaded: "消息配置加载完成，当前语言: {lang}"
+  messages_config_load_failed: "无法加载消息配置文件"
+  messages_config_loaded_en: "已加载英文默认配置"
+  messages_config_reloaded: "消息配置已重新加载"
+  test_environment: "测试环境，跳过依赖检查"
+  papi_loaded: "已经成功加载 Papi 前置！"
+  papi_load_failed: "Papi 前置加载失败！请检查版本！"
+  papi_load_error: "发生未知错误！无法加载 Papi 前置"
+  papi_not_found: "未找到 Papi 前置！将跳过注册！"
+  vault_loaded: "已经成功加载 Vault 前置！"
+  vault_load_failed: "Vault 前置加载失败！请检查版本！插件将停用"
+  vault_load_error: "发生未知错误！无法加载 Vault 前置"
+  vault_not_found: "未找到 Vault 前置！插件将停用"
+  nbtapi_loaded: "已经成功加载 NBTAPI 前置！"
+  nbtapi_load_error: "发生未知错误！无法加载 NBTAPI 前置"
+  nbtapi_not_found: "未找到 NBTAPI 前置！插件将停用"
+  message_not_found: "§c消息未找到: {path}"
+  cooldown_message: "§c请等待 {time} 秒后再打开背包!"
+  all_backpacks_saved: "所有个人背包数据已保存"
+  all_team_backpacks_saved: "所有团队背包数据已保存"
+  database_connections_closed: "数据库连接已关闭"
+  plugin_stats: "插件运行统计: 打开背包 {backpackOpens} 次，数据库操作 {dbOperations} 次"
+
+# 配置相关消息
+config:
+  monitor_started: "配置文件监视器已启动"
+  monitor_error: "配置文件监视器错误: {error}"

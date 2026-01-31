@@ -9,11 +9,11 @@ import org.bukkit.Material;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.Collections;
+import java.util.concurrent.ConcurrentHashMap;
 import com.leeinx.xibackpack.main.XiBackpack;
 import com.leeinx.xibackpack.backpack.PlayerBackpack;
 import com.leeinx.xibackpack.holder.LoadingHolder;
@@ -34,8 +34,8 @@ public class BackpackManager {
             throw new IllegalArgumentException("Plugin cannot be null");
         }
         this.plugin = plugin;
-        this.loadedBackpacks = new HashMap<>();
-        this.playerPages = new HashMap<>();
+        this.loadedBackpacks = new ConcurrentHashMap<>();
+        this.playerPages = new ConcurrentHashMap<>();
     }
 
     /**

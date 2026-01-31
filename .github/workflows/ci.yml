@@ -105,8 +105,8 @@ jobs:
       if: steps.check_tag.outputs.exists == 'false'
       run: |
         # 获取当前版本和tag
-        VERSION='${{ steps.get_version.outputs.version }}'
-        TAG_NAME='${{ steps.get_version.outputs.tag_name }}'
+        VERSION="${{ steps.get_version.outputs.version }}"
+        TAG_NAME="${{ steps.get_version.outputs.tag_name }}"
         
         # 获取所有本地tags并按版本号排序（仅包含v开头的语义化版本）
         TAG_NAMES=$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r)
@@ -129,30 +129,114 @@ jobs:
           PREVIOUS_TAG="${TAG_ARRAY[$CURRENT_INDEX+1]}"
         fi
         
-        # 获取commits
+        # 获取两个tag之间的commits（详细信息）
         COMMITS=""
         if [[ -n "$PREVIOUS_TAG" ]]; then
-          # 获取两个tag之间的commits
-          COMMITS=$(git log "$PREVIOUS_TAG..$TAG_NAME" --pretty=format:"%s (%h)")
+          COMMITS=$(git log "$PREVIOUS_TAG..$TAG_NAME" --pretty=format:"%h|%s|%an|%ad" --date=short)
         else
-          # 如果是第一个tag，获取所有commits
-          COMMITS=$(git log --pretty=format:"%s (%h)")
+          COMMITS=$(git log --pretty=format:"%h|%s|%an|%ad" --date=short)
+        fi
+        
+        # 统计提交数量
+        COMMIT_COUNT=0
+        if [[ -n "$COMMITS" ]]; then
+          COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
         fi
         
         # 生成Release Notes
-        RELEASE_NOTES="# XiBackpack $VERSION\n\n"
-        RELEASE_NOTES+="## 变更内容\n\n"
+        RELEASE_NOTES="## 🚀 XiBackpack $VERSION\n\n"
+        RELEASE_NOTES+="**发布时间**: $(date '+%Y年%m月%d日')\n\n"
         
-        if [[ -z "$COMMITS" ]]; then
-          RELEASE_NOTES+="- 自上次发布以来没有变更\n"
-        else
-          while IFS= read -r line; do
-            RELEASE_NOTES+="- $line\n"
-          done <<< "$COMMITS"
+        if [[ -n "$PREVIOUS_TAG" ]]; then
+          RELEASE_NOTES+="**变更范围**: $PREVIOUS_TAG → $TAG_NAME\n\n"
         fi
         
-        RELEASE_NOTES+="\n## 下载地址\n\n"
-        RELEASE_NOTES+="- [XiBackpack-${VERSION}.jar](https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/XiBackpack-${VERSION}.jar)\n"
+        RELEASE_NOTES+="### 📊 变更统计\n\n"
+        RELEASE_NOTES+="- **提交数量**: $COMMIT_COUNT 次\n"
+        RELEASE_NOTES+="- **提交者**: $(echo "$COMMITS" | cut -d'|' -f3 | sort -u | wc -l | tr -d ' ') 人\n\n"
+        
+        RELEASE_NOTES+="### 📝 变更内容\n\n"
+        
+        if [[ -z "$COMMITS" ]]; then
+          RELEASE_NOTES+"> ℹ️ 自上次发布以来没有变更\n\n"
+        else
+          # 按提交类型分类
+          FEATURE_COMMITS=$(echo "$COMMITS" | grep -iE "^(feat|feature|add|新增|添加)" || true)
+          FIX_COMMITS=$(echo "$COMMITS" | grep -iE "^(fix|bug|修复|修正)" || true)
+          DOCS_COMMITS=$(echo "$COMMITS" | grep -iE "^(docs|doc|文档|readme)" || true)
+          REFACTOR_COMMITS=$(echo "$COMMITS" | grep -iE "^(refactor|refact|重构|优化)" || true)
+          OTHER_COMMITS=$(echo "$COMMITS" | grep -vE "^(feat|feature|add|fix|bug|docs|doc|refactor|refact|新增|添加|修复|修正|文档|readme|重构|优化)" || true)
+          
+          # 功能新增
+          if [[ -n "$FEATURE_COMMITS" ]]; then
+            RELEASE_NOTES+="#### ✨ 新功能\n\n"
+            while IFS='|' read -r hash message author date; do
+              RELEASE_NOTES+="- $message\n"
+            done <<< "$FEATURE_COMMITS"
+            RELEASE_NOTES+="\n"
+          fi
+          
+          # 问题修复
+          if [[ -n "$FIX_COMMITS" ]]; then
+            RELEASE_NOTES+="#### 🐛 问题修复\n\n"
+            while IFS='|' read -r hash message author date; do
+              RELEASE_NOTES+="- $message\n"
+            done <<< "$FIX_COMMITS"
+            RELEASE_NOTES+="\n"
+          fi
+          
+          # 文档更新
+          if [[ -n "$DOCS_COMMITS" ]]; then
+            RELEASE_NOTES+="#### 📚 文档更新\n\n"
+            while IFS='|' read -r hash message author date; do
+              RELEASE_NOTES+="- $message\n"
+            done <<< "$DOCS_COMMITS"
+            RELEASE_NOTES+="\n"
+          fi
+          
+          # 代码优化
+          if [[ -n "$REFACTOR_COMMITS" ]]; then
+            RELEASE_NOTES+="#### ⚡ 代码优化\n\n"
+            while IFS='|' read -r hash message author date; do
+              RELEASE_NOTES+="- $message\n"
+            done <<< "$REFACTOR_COMMITS"
+            RELEASE_NOTES+="\n"
+          fi
+          
+          # 其他变更
+          if [[ -n "$OTHER_COMMITS" ]]; then
+            RELEASE_NOTES+="#### 🔧 其他变更\n\n"
+            while IFS='|' read -r hash message author date; do
+              RELEASE_NOTES+="- $message\n"
+            done <<< "$OTHER_COMMITS"
+            RELEASE_NOTES+="\n"
+          fi
+        fi
+        
+        RELEASE_NOTES+="---\n\n"
+        RELEASE_NOTES+="### 📥 下载地址\n\n"
+        RELEASE_NOTES+="| 文件名 | 下载链接 |\n"
+        RELEASE_NOTES+="|--------|----------|\n"
+        RELEASE_NOTES+="| XiBackpack-${VERSION}.jar | [下载](https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/XiBackpack-${VERSION}.jar) |\n\n"
+        
+        RELEASE_NOTES+="### 🔗 相关链接\n\n"
+        RELEASE_NOTES+="- [完整提交历史](https://github.com/${{ github.repository }}/commits/${TAG_NAME})\n"
+        if [[ -n "$PREVIOUS_TAG" ]]; then
+          RELEASE_NOTES+="- [与上个版本的差异](https://github.com/${{ github.repository }}/compare/${PREVIOUS_TAG}...${TAG_NAME})\n"
+        fi
+        RELEASE_NOTES+="- [问题反馈](https://github.com/${{ github.repository }}/issues)\n\n"
+        
+        RELEASE_NOTES+="---\n\n"
+        RELEASE_NOTES+="<details>\n"
+        RELEASE_NOTES+="<summary>📋 详细提交列表</summary>\n\n"
+        if [[ -n "$COMMITS" ]]; then
+          while IFS='|' read -r hash message author date; do
+            RELEASE_NOTES+="- **$hash** - $message\n"
+            RELEASE_NOTES+="  - 作者: $author\n"
+            RELEASE_NOTES+="  - 日期: $date\n\n"
+          done <<< "$COMMITS"
+        fi
+        RELEASE_NOTES+="</details>\n"
         
         # 设置输出
         echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"

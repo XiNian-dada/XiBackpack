@@ -8,11 +8,16 @@ database:
   username: "" # SQLite 忽略此配置
   password: "" # SQLite 忽略此配置
   # 连接池配置
-  max-pool-size: 10
-  min-idle: 2
-  connection-timeout: 30000
-  idle-timeout: 600000
-  max-lifetime: 1800000
+  max-pool-size: 5
+  min-idle: 1
+  connection-timeout: 5000
+  idle-timeout: 300000
+  max-lifetime: 600000
+  # 重试机制配置
+  retry:
+    max-attempts: 2
+    initial-delay: 500
+    max-delay: 2000
 
 # 背包配置
 backpack:
@@ -65,4 +70,4 @@ nbt:
   allow-mod-items: true
 
 # 语言设置
-language: "zh" # 支持 "zh" (中文) 或 "en" (英文)
+language: "zh_cn" # 支持 "zh_cn" (简体中文) 或 "en" (英文)

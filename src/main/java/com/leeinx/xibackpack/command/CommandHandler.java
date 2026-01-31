@@ -95,7 +95,17 @@ public class CommandHandler implements CommandExecutor {
                             createBackup(player);
                             return true;
                         } else if (args.length >= 3 && args[1].equalsIgnoreCase("restore")) {
-                            restoreBackup(player, args[2]);
+                            if (args.length >= 4 && args[2].equalsIgnoreCase("index")) {
+                                // 按索引恢复备份
+                                restoreBackupByIndex(player, args[3]);
+                            } else {
+                                // 按ID恢复备份
+                                restoreBackup(player, args[2]);
+                            }
+                            return true;
+                        } else if (args.length >= 2 && args[1].equalsIgnoreCase("list")) {
+                            // 列出所有备份
+                            listBackups(player);
                             return true;
                         } else {
                             showBackupHelp(player);
@@ -347,12 +357,14 @@ public class CommandHandler implements CommandExecutor {
             
             if (success) {
                 player.sendMessage(plugin.getMessage("backpack.backup_created", "id", backupId));
+                // 添加日志记录
+                com.leeinx.xibackpack.util.LogManager.info("管理员 %s 为玩家 %s 创建了背包备份: %s", 
+                    player.getName(), player.getName(), backupId);
             } else {
                 player.sendMessage(plugin.getMessage("backpack.backup_create_failed"));
             }
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "创建背包备份时出错", e);
-            player.sendMessage("§c创建背包备份时发生错误，请联系管理员");
+            com.leeinx.xibackpack.util.ExceptionHandler.handleBackupException(player, "创建背包备份", e);
         }
     }
     
@@ -409,9 +421,11 @@ public class CommandHandler implements CommandExecutor {
             plugin.getBackpackManager().saveBackpack(currentBackpack);
             
             player.sendMessage(plugin.getMessage("backpack.backup_restored", "id", backupId));
+            // 添加日志记录
+            com.leeinx.xibackpack.util.LogManager.info("管理员 %s 为玩家 %s 恢复了背包备份: %s", 
+                player.getName(), player.getName(), backupId);
         } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "恢复背包备份时出错", e);
-            player.sendMessage("§c恢复背包备份时发生错误，请联系管理员");
+            com.leeinx.xibackpack.util.ExceptionHandler.handleBackupException(player, "恢复背包备份", e);
         }
     }
     
@@ -597,6 +611,125 @@ public class CommandHandler implements CommandExecutor {
      * 显示备份相关帮助
      * @param player 玩家
      */
+    /**
+     * 按索引恢复背包备份
+     * @param player 玩家
+     * @param indexStr 备份索引（从1开始）
+     */
+    private void restoreBackupByIndex(Player player, String indexStr) {
+        if (player == null || indexStr == null) {
+            plugin.getLogger().warning("按索引恢复背包备份时参数为空: player=" + player + ", indexStr=" + indexStr);
+            return;
+        }
+        
+        try {
+            // 检查管理权限
+            if (!player.hasPermission("xibackpack.admin")) {
+                player.sendMessage(plugin.getMessage("backpack.backup_no_permission"));
+                return;
+            }
+            
+            // 解析索引
+            int index;
+            try {
+                index = Integer.parseInt(indexStr);
+                if (index < 1) {
+                    player.sendMessage("§c索引必须大于等于1!");
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                player.sendMessage("§c无效的索引格式!");
+                return;
+            }
+            
+            // 获取所有备份ID
+            List<String> backupIds = plugin.getDatabaseManager().getPlayerBackupIds(player.getUniqueId());
+            if (backupIds.isEmpty()) {
+                player.sendMessage("§c没有找到备份!");
+                return;
+            }
+            
+            // 检查索引是否有效
+            if (index > backupIds.size()) {
+                player.sendMessage("§c无效的索引! 只有 " + backupIds.size() + " 个备份可用。");
+                return;
+            }
+            
+            // 获取指定索引的备份ID（注意：列表是按时间倒序排列的，所以索引1对应最新的备份）
+            String backupId = backupIds.get(index - 1);
+            
+            // 从数据库加载备份
+            String backupData = plugin.getDatabaseManager().loadPlayerBackpackBackup(
+                player.getUniqueId(), 
+                backupId
+            );
+            
+            if (backupData == null) {
+                player.sendMessage("§c找不到指定的备份!");
+                return;
+            }
+            
+            // 反序列化备份数据
+            PlayerBackpack backupBackpack = PlayerBackpack.deserialize(backupData, player.getUniqueId());
+            
+            // 应用备份到当前背包
+            PlayerBackpack currentBackpack = plugin.getBackpackManager().getBackpack(player);
+            currentBackpack.getItems().clear();
+            
+            // 复制备份的物品到当前背包
+            for (Map.Entry<Integer, ItemStack> entry : backupBackpack.getItems().entrySet()) {
+                currentBackpack.setItem(entry.getKey(), entry.getValue());
+            }
+            
+            currentBackpack.setSize(backupBackpack.getSize());
+            
+            // 保存背包
+            plugin.getBackpackManager().saveBackpack(currentBackpack);
+            
+            player.sendMessage(plugin.getMessage("backpack.backup_restored", "id", backupId));
+            player.sendMessage("§e已恢复到第 " + index + " 个备份（按时间倒序）");
+        } catch (Exception e) {
+            com.leeinx.xibackpack.util.ExceptionHandler.handleBackupException(player, "按索引恢复背包备份", e);
+        }
+    }
+    
+    /**
+     * 列出所有可用的备份
+     * @param player 玩家
+     */
+    private void listBackups(Player player) {
+        if (player == null) {
+            plugin.getLogger().warning("尝试为null玩家列出背包备份");
+            return;
+        }
+        
+        try {
+            // 检查管理权限
+            if (!player.hasPermission("xibackpack.admin")) {
+                player.sendMessage(plugin.getMessage("backpack.backup_no_permission"));
+                return;
+            }
+            
+            // 获取所有备份ID
+            List<String> backupIds = plugin.getDatabaseManager().getPlayerBackupIds(player.getUniqueId());
+            if (backupIds.isEmpty()) {
+                player.sendMessage("§c没有找到备份!");
+                return;
+            }
+            
+            // 显示备份列表
+            player.sendMessage("§e=== 备份列表 ===");
+            player.sendMessage("§7（按时间倒序排列，索引从1开始）");
+            for (int i = 0; i < backupIds.size(); i++) {
+                String backupId = backupIds.get(i);
+                player.sendMessage("§6[" + (i + 1) + "] §7" + backupId);
+            }
+            player.sendMessage("§e=== 备份列表结束 ===");
+        } catch (Exception e) {
+            com.leeinx.xibackpack.util.ExceptionHandler.handleBackupException(player, "列出背包备份", e);
+        }
+    }
+    
     private void showBackupHelp(Player player) {
         if (player == null) {
             return;
@@ -605,6 +738,8 @@ public class CommandHandler implements CommandExecutor {
         player.sendMessage(plugin.getMessage("backpack.backup_help_header"));
         player.sendMessage(plugin.getMessage("backpack.backup_help_create"));
         player.sendMessage(plugin.getMessage("backpack.backup_help_restore"));
+        player.sendMessage("§6/xibackpack backup restore index <索引> §7- 按索引恢复备份（从1开始）");
+        player.sendMessage("§6/xibackpack backup list §7- 列出所有可用的备份");
     }
     
     /**
