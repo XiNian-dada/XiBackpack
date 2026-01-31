@@ -193,10 +193,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
         // 初始化数据库管理器
         try {
             databaseManager = new DatabaseManager(this);
-            // 检查是否为测试环境（通过检查是否为MockBukkit实例）
-            if (!isTestEnvironment()) {
-                databaseManager.initialize();
-            }
+            // 无论是否为测试环境，都初始化数据库
+            // 测试环境会自动使用内存SQLite数据库
+            databaseManager.initialize();
         } catch (Exception e) {
             getLogger().log(Level.SEVERE, "数据库初始化失败", e);
             // 在测试环境中跳过数据库初始化失败

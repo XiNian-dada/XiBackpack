@@ -25,6 +25,11 @@ public abstract class TestBase {
         MockBukkit.mock();
         // 创建模拟服务器
         server = MockBukkit.getMock();
+        
+        // 在加载插件前，修改配置文件使用内存SQLite
+        System.setProperty("test.database.type", "sqlite");
+        System.setProperty("test.database.database", ":memory:");
+        
         // 加载插件
         plugin = MockBukkit.load(XiBackpack.class);
         // 创建测试玩家
@@ -45,6 +50,9 @@ public abstract class TestBase {
 
     @AfterEach
     public void tearDown() {
+        // 清理系统属性
+        System.clearProperty("test.database.type");
+        System.clearProperty("test.database.database");
         // 卸载插件
         MockBukkit.unmock();
     }
@@ -63,12 +71,21 @@ public abstract class TestBase {
     }
 
     /**
-     * 模拟延迟执行
+     * 模拟延迟执行，确保所有异步任务完成
      */
     protected void waitForAsyncTasks() {
         // 在测试中等待异步任务完成，添加try-catch避免没有任务时的NullPointerException
         try {
-            server.getScheduler().performOneTick();
+            // 执行多次tick，确保所有异步任务完成
+            for (int i = 0; i < 5; i++) {
+                server.getScheduler().performOneTick();
+                // 模拟时间间隔
+                try {
+                    Thread.sleep(50);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
         } catch (NullPointerException e) {
             // 没有异步任务时忽略异常
         }

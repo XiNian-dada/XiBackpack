@@ -75,12 +75,12 @@ XiBackpack 是一个功能强大的 Minecraft 服务器插件，为玩家提供�
 ```yaml
 # 数据库配置
 database:
-  type: "mysql" # 数据库类型（mysql, postgresql, mongodb）
-  host: "localhost" # 数据库主机
-  port: 3306 # 数据库端口
-  database: "xibackpack" # 数据库名称
-  username: "" # 用户名
-  password: "" # 密码
+  type: "sqlite" # 数据库类型（sqlite, mysql, postgresql, mongodb）
+  host: "localhost" # 数据库主机（SQLite忽略）
+  port: 3306 # 数据库端口（SQLite忽略）
+  database: "xibackpack" # 数据库名称（SQLite为文件名）
+  username: "" # 用户名（SQLite忽略）
+  password: "" # 密码（SQLite忽略）
   # 连接池配置
   max-pool-size: 10
   min-idle: 2

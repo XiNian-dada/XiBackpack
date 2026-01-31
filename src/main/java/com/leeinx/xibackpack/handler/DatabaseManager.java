@@ -6,6 +6,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.bukkit.inventory.ItemStack;
 import com.leeinx.xibackpack.backpack.TeamBackpack;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -52,6 +53,17 @@ public class DatabaseManager {
                 case "mongodb":
                     config.setJdbcUrl("mongodb://" + host + ":" + port + "/" + database);
                     break;
+                case "sqlite":
+                    // SQLite数据库文件存储在插件数据目录
+                    String dbPath = plugin.getDataFolder() + File.separator + database + ".db";
+                    config.setJdbcUrl("jdbc:sqlite:" + dbPath);
+                    // SQLite特定配置
+                    config.setMaximumPoolSize(1); // SQLite不支持多连接
+                    config.setMinimumIdle(1);
+                    config.setConnectionTimeout(30000);
+                    config.setIdleTimeout(600000);
+                    config.setMaxLifetime(1800000);
+                    break;
                 default:
                     config.setJdbcUrl("jdbc:mysql://" + host + ":" + port + "/" + database + "?useSSL=false&serverTimezone=UTC");
             }
@@ -59,24 +71,28 @@ public class DatabaseManager {
             config.setUsername(username);
             config.setPassword(password);
 
-            // 连接池配置
-            config.setMaximumPoolSize(com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10));
-            config.setMinimumIdle(com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2));
-            config.setConnectionTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.connection-timeout", 30000));
-            config.setIdleTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
-            config.setMaxLifetime(com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
+            // 连接池配置（非SQLite）
+            if (!dbType.equalsIgnoreCase("sqlite")) {
+                config.setMaximumPoolSize(com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10));
+                config.setMinimumIdle(com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2));
+                config.setConnectionTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.connection-timeout", 30000));
+                config.setIdleTimeout(com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
+                config.setMaxLifetime(com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
+            }
 
             // MySQL 特定配置
-            config.addDataSourceProperty("cachePrepStmts", "true");
-            config.addDataSourceProperty("prepStmtCacheSize", "250");
-            config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
-            config.addDataSourceProperty("useServerPrepStmts", "true");
-            config.addDataSourceProperty("useLocalSessionState", "true");
-            config.addDataSourceProperty("rewriteBatchedStatements", "true");
-            config.addDataSourceProperty("cacheResultSetMetadata", "true");
-            config.addDataSourceProperty("cacheServerConfiguration", "true");
-            config.addDataSourceProperty("elideSetAutoCommits", "true");
-            config.addDataSourceProperty("maintainTimeStats", "false");
+            if (dbType.equalsIgnoreCase("mysql")) {
+                config.addDataSourceProperty("cachePrepStmts", "true");
+                config.addDataSourceProperty("prepStmtCacheSize", "250");
+                config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
+                config.addDataSourceProperty("useServerPrepStmts", "true");
+                config.addDataSourceProperty("useLocalSessionState", "true");
+                config.addDataSourceProperty("rewriteBatchedStatements", "true");
+                config.addDataSourceProperty("cacheResultSetMetadata", "true");
+                config.addDataSourceProperty("cacheServerConfiguration", "true");
+                config.addDataSourceProperty("elideSetAutoCommits", "true");
+                config.addDataSourceProperty("maintainTimeStats", "false");
+            }
 
             dataSource = new HikariDataSource(config);
 
@@ -97,67 +113,147 @@ public class DatabaseManager {
         try {
             connection = getConnection();
             
+            // 获取数据库类型
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            // 启用SQLite外键约束
+            if (isSQLite) {
+                try (Statement statement = connection.createStatement()) {
+                    statement.executeUpdate("PRAGMA foreign_keys = ON");
+                }
+            }
+            
             // 创建背包表
-            String createTableSQL = "CREATE TABLE IF NOT EXISTS player_backpacks (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                    "player_uuid VARCHAR(36) NOT NULL UNIQUE, " +
-                    "backpack_data LONGTEXT, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" +
-                    ")";
+            String createTableSQL;
+            if (isSQLite) {
+                createTableSQL = "CREATE TABLE IF NOT EXISTS player_backpacks (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        "player_uuid VARCHAR(36) NOT NULL UNIQUE, " +
+                        "backpack_data TEXT, " +
+                        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP" +
+                        ")";
+            } else {
+                createTableSQL = "CREATE TABLE IF NOT EXISTS player_backpacks (" +
+                        "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                        "player_uuid VARCHAR(36) NOT NULL UNIQUE, " +
+                        "backpack_data LONGTEXT, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" +
+                        ")";
+            }
 
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate(createTableSQL);
             }
             
             // 创建背包备份表
-            String createBackupTableSQL = "CREATE TABLE IF NOT EXISTS player_backpack_backups (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                    "player_uuid VARCHAR(36) NOT NULL, " +
-                    "backup_id VARCHAR(100) NOT NULL, " +
-                    "backpack_data LONGTEXT, " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "UNIQUE KEY unique_backup (player_uuid, backup_id)," +
-                    "INDEX idx_player_uuid (player_uuid)," +
-                    "INDEX idx_created_at (created_at)" +
-                    ")";
-
+            String createBackupTableSQL;
+            if (isSQLite) {
+                createBackupTableSQL = "CREATE TABLE IF NOT EXISTS player_backpack_backups (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        "player_uuid VARCHAR(36) NOT NULL, " +
+                        "backup_id VARCHAR(100) NOT NULL, " +
+                        "backpack_data TEXT, " +
+                        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, " +
+                        "UNIQUE (player_uuid, backup_id)" +
+                        ")";
+            } else {
+                createBackupTableSQL = "CREATE TABLE IF NOT EXISTS player_backpack_backups (" +
+                        "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                        "player_uuid VARCHAR(36) NOT NULL, " +
+                        "backup_id VARCHAR(100) NOT NULL, " +
+                        "backpack_data LONGTEXT, " +
+                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "UNIQUE KEY unique_backup (player_uuid, backup_id)," +
+                        "INDEX idx_player_uuid (player_uuid)," +
+                        "INDEX idx_created_at (created_at)" +
+                        ")";
+            }
+            
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate(createBackupTableSQL);
             }
+            
+            // 为SQLite创建索引
+            if (isSQLite) {
+                String createIndexSQL1 = "CREATE INDEX IF NOT EXISTS idx_player_uuid ON player_backpack_backups (player_uuid)";
+                String createIndexSQL2 = "CREATE INDEX IF NOT EXISTS idx_created_at ON player_backpack_backups (created_at)";
+                try (Statement statement = connection.createStatement()) {
+                    statement.executeUpdate(createIndexSQL1);
+                    statement.executeUpdate(createIndexSQL2);
+                }
+            }
 
             // 创建团队背包表
-            String createTeamBackpackTableSQL = "CREATE TABLE IF NOT EXISTS team_backpacks (" +
-                    "id VARCHAR(100) PRIMARY KEY, " +
-                    "name VARCHAR(100) NOT NULL, " +
-                    "owner_uuid VARCHAR(36) NOT NULL, " +
-                    "backpack_data LONGTEXT, " +
-                    "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" +
-                    ")";
+            String createTeamBackpackTableSQL;
+            if (isSQLite) {
+                createTeamBackpackTableSQL = "CREATE TABLE IF NOT EXISTS team_backpacks (" +
+                        "id VARCHAR(100) PRIMARY KEY, " +
+                        "name VARCHAR(100) NOT NULL, " +
+                        "owner_uuid VARCHAR(36) NOT NULL, " +
+                        "backpack_data TEXT, " +
+                        "created_at TEXT DEFAULT CURRENT_TIMESTAMP, " +
+                        "updated_at TEXT DEFAULT CURRENT_TIMESTAMP" +
+                        ")";
+            } else {
+                createTeamBackpackTableSQL = "CREATE TABLE IF NOT EXISTS team_backpacks (" +
+                        "id VARCHAR(100) PRIMARY KEY, " +
+                        "name VARCHAR(100) NOT NULL, " +
+                        "owner_uuid VARCHAR(36) NOT NULL, " +
+                        "backpack_data LONGTEXT, " +
+                        "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP" +
+                        ")";
+            }
 
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate(createTeamBackpackTableSQL);
             }
 
             // 创建团队背包成员关系表
-            String createTeamMembersTableSQL = "CREATE TABLE IF NOT EXISTS team_backpack_members (" +
-                    "id INT AUTO_INCREMENT PRIMARY KEY, " +
-                    "backpack_id VARCHAR(100) NOT NULL, " +
-                    "player_uuid VARCHAR(36) NOT NULL, " +
-                    "role ENUM('OWNER', 'MEMBER') DEFAULT 'MEMBER', " +
-                    "joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
-                    "UNIQUE KEY unique_member (backpack_id, player_uuid), " +
-                    "INDEX idx_backpack_id (backpack_id), " +
-                    "INDEX idx_player_uuid (player_uuid), " +
-                    "FOREIGN KEY (backpack_id) REFERENCES team_backpacks(id) ON DELETE CASCADE" +
-                    ")";
+            String createTeamMembersTableSQL;
+            if (isSQLite) {
+                createTeamMembersTableSQL = "CREATE TABLE IF NOT EXISTS team_backpack_members (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                        "backpack_id VARCHAR(100) NOT NULL, " +
+                        "player_uuid VARCHAR(36) NOT NULL, " +
+                        "role TEXT DEFAULT 'MEMBER', " +
+                        "joined_at TEXT DEFAULT CURRENT_TIMESTAMP, " +
+                        "UNIQUE (backpack_id, player_uuid), " +
+                        "FOREIGN KEY (backpack_id) REFERENCES team_backpacks(id) ON DELETE CASCADE" +
+                        ")";
+            } else {
+                createTeamMembersTableSQL = "CREATE TABLE IF NOT EXISTS team_backpack_members (" +
+                        "id INT AUTO_INCREMENT PRIMARY KEY, " +
+                        "backpack_id VARCHAR(100) NOT NULL, " +
+                        "player_uuid VARCHAR(36) NOT NULL, " +
+                        "role ENUM('OWNER', 'MEMBER') DEFAULT 'MEMBER', " +
+                        "joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, " +
+                        "UNIQUE KEY unique_member (backpack_id, player_uuid), " +
+                        "INDEX idx_backpack_id (backpack_id), " +
+                        "INDEX idx_player_uuid (player_uuid), " +
+                        "FOREIGN KEY (backpack_id) REFERENCES team_backpacks(id) ON DELETE CASCADE" +
+                        ")";
+            }
 
             try (Statement statement = connection.createStatement()) {
                 statement.executeUpdate(createTeamMembersTableSQL);
             }
+            
+            // 为SQLite创建索引
+            if (isSQLite) {
+                String createIndexSQL1 = "CREATE INDEX IF NOT EXISTS idx_backpack_id ON team_backpack_members (backpack_id)";
+                String createIndexSQL2 = "CREATE INDEX IF NOT EXISTS idx_player_uuid ON team_backpack_members (player_uuid)";
+                try (Statement statement = connection.createStatement()) {
+                    statement.executeUpdate(createIndexSQL1);
+                    statement.executeUpdate(createIndexSQL2);
+                }
+            }
 
             com.leeinx.xibackpack.util.LogManager.info(plugin.getMessage("database.table_init_success"));
         } catch (SQLException e) {
+            com.leeinx.xibackpack.util.LogManager.warning("数据库表初始化失败: %s", e.getMessage());
+            e.printStackTrace();
             com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("数据库表初始化", e);
         } finally {
             if (connection != null) {
@@ -177,21 +273,7 @@ public class DatabaseManager {
      */
     public Connection getConnection() throws SQLException {
         if (dataSource == null) {
-            // 检查是否为测试环境
-            boolean isTest = false;
-            try {
-                Class.forName("be.seeseemelk.mockbukkit.MockBukkit");
-                isTest = true;
-            } catch (ClassNotFoundException e) {
-                // 非测试环境，抛出异常
-            }
-            
-            if (isTest) {
-                // 测试环境返回null，让上层方法处理
-                return null;
-            } else {
-                throw new SQLException("数据库连接池未初始化");
-            }
+            throw new SQLException("数据库连接池未初始化");
         }
         return dataSource.getConnection();
     }
@@ -221,14 +303,31 @@ public class DatabaseManager {
         Connection connection = null;
         try {
             connection = getConnection();
-            String sql = "INSERT INTO player_backpacks (player_uuid, backpack_data) VALUES (?, ?) " +
-                         "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
             
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
-                stmt.setString(2, backpackData);
-                stmt.executeUpdate();
-                return true;
+            // 获取数据库类型
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            if (isSQLite) {
+                // SQLite使用UPSERT语法
+                String sql = "INSERT OR REPLACE INTO player_backpacks (player_uuid, backpack_data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)";
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    stmt.setString(2, backpackData);
+                    stmt.executeUpdate();
+                    return true;
+                }
+            } else {
+                // 其他数据库使用ON DUPLICATE KEY UPDATE
+                String sql = "INSERT INTO player_backpacks (player_uuid, backpack_data) VALUES (?, ?) " +
+                             "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
+                    stmt.setString(2, backpackData);
+                    stmt.executeUpdate();
+                    return true;
+                }
             }
         } catch (SQLException e) {
             com.leeinx.xibackpack.util.ExceptionHandler.handleDatabaseException("保存玩家背包数据", e);
@@ -258,13 +357,6 @@ public class DatabaseManager {
         Connection connection = null;
         try {
             connection = getConnection();
-            
-            // 检查是否为测试环境（connection为null表示在测试环境中）
-            if (connection == null) {
-                // 测试环境，返回null
-                return null;
-            }
-            
             String sql = "SELECT backpack_data FROM player_backpacks WHERE player_uuid = ?";
             
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -313,13 +405,27 @@ public class DatabaseManager {
                 deleteOldestBackup(playerUUID);
             }
             
-            String sql = "INSERT INTO player_backpack_backups (player_uuid, backup_id, backpack_data) VALUES (?, ?, ?) " +
-                         "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data)";
+            // 获取数据库类型
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            String sql;
+            if (isSQLite) {
+                // SQLite使用UPSERT语法
+                sql = "INSERT OR REPLACE INTO player_backpack_backups (player_uuid, backup_id, backpack_data, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
+            } else {
+                // 其他数据库使用ON DUPLICATE KEY UPDATE
+                sql = "INSERT INTO player_backpack_backups (player_uuid, backup_id, backpack_data) VALUES (?, ?, ?) " +
+                      "ON DUPLICATE KEY UPDATE backpack_data = VALUES(backpack_data)";
+            }
             
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, playerUUID.toString());
                 stmt.setString(2, backupId);
                 stmt.setString(3, backpackData);
+                if (isSQLite) {
+                    // SQLite不需要设置created_at参数，使用默认值
+                }
                 stmt.executeUpdate();
                 return true;
             }
@@ -514,8 +620,18 @@ public class DatabaseManager {
             }
             
             // 保存背包基本信息
-            String sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            String sql;
+            if (isSQLite) {
+                // SQLite使用UPSERT语法
+                sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+            } else {
+                // 其他数据库使用ON DUPLICATE KEY UPDATE
+                sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
                          "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+            }
             
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, backpack.getId());
@@ -779,8 +895,18 @@ public class DatabaseManager {
             }
 
             // 1. 保存背包基本信息
-            String sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
-                    "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            String sql;
+            if (isSQLite) {
+                // SQLite使用UPSERT语法
+                sql = "INSERT OR REPLACE INTO team_backpacks (id, name, owner_uuid, backpack_data, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)";
+            } else {
+                // 其他数据库使用ON DUPLICATE KEY UPDATE
+                sql = "INSERT INTO team_backpacks (id, name, owner_uuid, backpack_data) VALUES (?, ?, ?, ?) " +
+                        "ON DUPLICATE KEY UPDATE name = VALUES(name), backpack_data = VALUES(backpack_data), updated_at = CURRENT_TIMESTAMP";
+            }
 
             try (PreparedStatement stmt = connection.prepareStatement(sql)) {
                 stmt.setString(1, id);

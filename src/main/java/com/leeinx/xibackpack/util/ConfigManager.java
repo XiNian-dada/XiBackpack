@@ -128,9 +128,9 @@ public class ConfigManager {
 
         // 验证数据库配置
         String dbType = getString("database.type");
-        if (!dbType.matches("mysql|postgresql|mongodb")) {
-            LogManager.warning("数据库类型配置无效: %s，使用默认值 mysql", dbType);
-            set("database.type", "mysql");
+        if (!dbType.matches("mysql|postgresql|mongodb|sqlite")) {
+            LogManager.warning("数据库类型配置无效: %s，使用默认值 sqlite", dbType);
+            set("database.type", "sqlite");
         }
 
         // 验证背包配置
@@ -225,6 +225,12 @@ public class ConfigManager {
      * @return 配置值
      */
     public static String getString(String path, String defaultValue) {
+        // 测试环境优先使用系统属性
+        String testProperty = "test." + path;
+        if (System.getProperty(testProperty) != null) {
+            return System.getProperty(testProperty);
+        }
+        
         if (cachedValues.containsKey(path)) {
             return (String) cachedValues.get(path);
         }
@@ -258,6 +264,16 @@ public class ConfigManager {
      * @return 配置值
      */
     public static int getInt(String path, int defaultValue) {
+        // 测试环境优先使用系统属性
+        String testProperty = "test." + path;
+        if (System.getProperty(testProperty) != null) {
+            try {
+                return Integer.parseInt(System.getProperty(testProperty));
+            } catch (NumberFormatException e) {
+                LogManager.warning("测试环境系统属性转换失败: %s = %s", testProperty, System.getProperty(testProperty));
+            }
+        }
+        
         if (cachedValues.containsKey(path)) {
             Object value = cachedValues.get(path);
             if (value instanceof Integer) {
@@ -297,6 +313,16 @@ public class ConfigManager {
      * @return 配置值
      */
     public static long getLong(String path, long defaultValue) {
+        // 测试环境优先使用系统属性
+        String testProperty = "test." + path;
+        if (System.getProperty(testProperty) != null) {
+            try {
+                return Long.parseLong(System.getProperty(testProperty));
+            } catch (NumberFormatException e) {
+                LogManager.warning("测试环境系统属性转换失败: %s = %s", testProperty, System.getProperty(testProperty));
+            }
+        }
+        
         if (cachedValues.containsKey(path)) {
             Object value = cachedValues.get(path);
             if (value instanceof Long) {
