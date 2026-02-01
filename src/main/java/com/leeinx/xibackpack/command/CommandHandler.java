@@ -600,8 +600,7 @@ public class CommandHandler implements CommandExecutor {
             return;
         } else if (args[1].equalsIgnoreCase("list")) {
             // 列出玩家可以访问的所有团队背包
-            // TODO: 实现列出背包逻辑
-            player.sendMessage("§e列出团队背包功能将在后续版本中实现");
+            plugin.getTeamBackpackManager().openManagementGUI(player);
         } else {
             player.sendMessage("§c未知的团队背包子命令: " + args[1]);
         }

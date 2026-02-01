@@ -26,28 +26,38 @@ XiBackpack 是一个功能强大的 Minecraft 服务器插件，为玩家提供�
 
 ### 基本命令
 - `/backpack` 或 `/bp` 或 `/bag` - 打开个人云背包
+- `/xibackpack` 或 `/xbp` 或 `/cloudpack` - 打开个人云背包
 - `/xibackpack open` 或 `/xbp open` 或 `/cloudpack open` - 打开个人云背包
 - `/xibackpack upgrade` 或 `/xbp upgrade` 或 `/cloudpack upgrade` - 升级背包容量
+- `/xibackpack reload` 或 `/xbp reload` 或 `/cloudpack reload` - 重新加载配置文件（需要管理员权限）
 - `/xibackpack help` 或 `/xbp help` 或 `/cloudpack help` - 显示帮助信息
-
-### 团队背包命令
-- `/xibackpack team create <名称>` - 创建团队背包（需要权限：xibackpack.team.create）
-- `/xibackpack team open <ID>` - 打开指定团队背包
-- `/xibackpack team addmember <背包ID> <玩家名>` - 添加成员到团队背包（待实现）
-- `/xibackpack team removemember <背包ID> <玩家名>` - 从团队背包移除成员（待实现）
-- `/xibackpack team list` - 列出可访问的团队背包（待实现）
 
 ### 备份命令（需要管理员权限）
 - `/xibackpack backup create` - 创建背包备份
-- `/xibackpack backup restore <ID>` - 恢复指定备份
+- `/xibackpack backup restore <ID>` - 按ID恢复指定备份
+- `/xibackpack backup restore index <索引>` - 按索引恢复备份（从1开始，最新的备份索引为1）
+- `/xibackpack backup list` - 列出所有可用的备份
+
+### 团队背包命令
+- `/xibackpack team create <名称>` - 创建团队背包（需要权限：xibackpack.team.create）
+- `/xibackpack team gui` 或 `/xibackpack team manage` - 打开团队背包管理界面
+- `/xibackpack team open <ID>` - 打开指定团队背包
+- `/xibackpack team addmember <背包ID> <玩家名>` - 添加成员到团队背包（需要团队背包管理员权限）
+- `/xibackpack team removemember <背包ID> <玩家名>` - 从团队背包移除成员（需要团队背包管理员权限）
+- `/xibackpack team list` - 列出可访问的团队背包
 
 ## 权限节点
 
 ### 基本权限
 - `xibackpack.use` - 允许使用基本背包功能（默认：所有玩家）
-- `xibackpack.admin` - 允许使用备份功能和全局管理权限（默认：操作员）
+- `xibackpack.admin` - 允许使用备份功能、重载配置和全局管理权限（默认：操作员）
 - `xibackpack.bypass.cooldown` - 允许绕过背包冷却时间（默认：操作员）
 - `xibackpack.team.create` - 允许创建团队背包（默认：所有玩家）
+
+### 背包升级权限
+- `xibackpack.upgrade.36` - 从27格升级到36格需要的权限
+- `xibackpack.upgrade.45` - 从36格升级到45格需要的权限
+- `xibackpack.upgrade.54` - 从45格升级到54格需要的权限
 
 ### 团队背包特定权限
 每个团队背包都有独立的权限节点，格式为：`xibackpack.team.<背包名称>.admin`
@@ -63,13 +73,16 @@ XiBackpack 是一个功能强大的 Minecraft 服务器插件，为玩家提供�
 - 全局管理员 (`xibackpack.admin`) 自动拥有所有团队背包的管理员权限
 
 ### 权限说明
-| 权限节点 | 描述 | 默认值 |
-|---------|------|--------|
-| xibackpack.use | 允许使用基本背包功能 | 所有玩家 |
-| xibackpack.admin | 全局管理权限 | 操作员 |
-| xibackpack.bypass.cooldown | 绕过背包冷却时间 | 操作员 |
-| xibackpack.team.create | 创建团队背包 | 所有玩家 |
-| xibackpack.team.<背包名称>.admin | 特定团队背包的管理员权限 | 无 |
+| 权限节点 | 描述 | 默认值 | 命令权限 |
+|---------|------|--------|----------|
+| xibackpack.use | 允许使用基本背包功能 | 所有玩家 | `/backpack`, `/xibackpack open`, `/xibackpack upgrade` |
+| xibackpack.admin | 全局管理权限 | 操作员 | `/xibackpack backup`, `/xibackpack reload` |
+| xibackpack.bypass.cooldown | 绕过背包冷却时间 | 操作员 | 所有打开背包的命令 |
+| xibackpack.team.create | 创建团队背包 | 所有玩家 | `/xibackpack team create` |
+| xibackpack.team.<背包名称>.admin | 特定团队背包的管理员权限 | 无 | `/xibackpack team addmember`, `/xibackpack team removemember` |
+| xibackpack.upgrade.36 | 从27格升级到36格需要的权限 | 无 | `/xibackpack upgrade` |
+| xibackpack.upgrade.45 | 从36格升级到45格需要的权限 | 无 | `/xibackpack upgrade` |
+| xibackpack.upgrade.54 | 从45格升级到54格需要的权限 | 无 | `/xibackpack upgrade` |
 
 ## 配置文件
 

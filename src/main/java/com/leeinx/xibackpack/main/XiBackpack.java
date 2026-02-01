@@ -38,11 +38,6 @@ import com.leeinx.xibackpack.backpack.TeamBackpack;
 import com.leeinx.xibackpack.holder.LoadingHolder;
 import com.leeinx.xibackpack.holder.TeamBackpackManagementHolder;
 
-
-//TODO Multi upgrade method
-//TODO Multi player backpack
-//TODO Backup restore
-
 /*
  * 团队背包功能完整测试流程
  * =========================
@@ -838,6 +833,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                 com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("关闭数据库连接", e);
             }
         }
+        
+        // 关闭日志处理器
+        com.leeinx.xibackpack.util.LogManager.shutdown();
         
         // 输出性能统计
         com.leeinx.xibackpack.util.LogManager.info("插件运行统计: 打开背包 " + totalBackpackOpens + " 次，数据库操作 " + totalDatabaseOperations + " 次");

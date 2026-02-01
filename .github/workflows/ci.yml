@@ -104,112 +104,108 @@ jobs:
       id: generate_release_notes
       if: steps.check_tag.outputs.exists == 'false'
       run: |
-        # 获取当前版本和tag
+        # 1. 确定当前 Tag 和版本
         VERSION="${{ steps.get_version.outputs.version }}"
         TAG_NAME="${{ steps.get_version.outputs.tag_name }}"
         
-        # 获取所有本地tags并按版本号排序（仅包含v开头的语义化版本）
-        TAG_NAMES=$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r)
+        echo "当前版本: $TAG_NAME"
         
-        # 将tag列表转换为数组
-        IFS=$'\n' read -r -a TAG_ARRAY <<< "$TAG_NAMES"
+        # 2. 核心修正：利用 Git 拓扑寻找上一个 Tag
+        # 逻辑：从当前 HEAD 的前一个 commit (HEAD^) 开始，寻找最近的一个 tag
+        # 如果找不到（比如这是第一个版本），则 PREVIOUS_TAG 为空
+        PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
         
-        # 找到当前tag的位置
-        CURRENT_INDEX=-1
-        for i in "${!TAG_ARRAY[@]}"; do
-          if [[ "${TAG_ARRAY[$i]}" == "$TAG_NAME" ]]; then
-            CURRENT_INDEX=$i
-            break
-          fi
-        done
+        echo "上一个版本: ${PREVIOUS_TAG:-'无 (这是第一个版本)'}"
         
-        # 查找前一个版本的tag
-        PREVIOUS_TAG=""
-        if [[ $CURRENT_INDEX -ne -1 && $CURRENT_INDEX -lt ${#TAG_ARRAY[@]}-1 ]]; then
-          PREVIOUS_TAG="${TAG_ARRAY[$CURRENT_INDEX+1]}"
-        fi
-        
-        # 获取两个tag之间的commits（详细信息）
+        # 3. 获取提交日志
         COMMITS=""
         if [[ -n "$PREVIOUS_TAG" ]]; then
-          COMMITS=$(git log "$PREVIOUS_TAG..$TAG_NAME" --pretty=format:"%h|%s|%an|%ad" --date=short)
+          # 获取两个 Tag 之间的差异
+          echo "生成范围: $PREVIOUS_TAG...$TAG_NAME"
+          COMMITS=$(git log "$PREVIOUS_TAG..HEAD" --pretty=format:"%h|%s|%an|%ad" --date=short)
         else
+          # 如果没有上一个 Tag，获取所有历史
+          echo "生成范围: 全部提交"
           COMMITS=$(git log --pretty=format:"%h|%s|%an|%ad" --date=short)
         fi
-        
+
         # 统计提交数量
         COMMIT_COUNT=0
         if [[ -n "$COMMITS" ]]; then
           COMMIT_COUNT=$(echo "$COMMITS" | wc -l)
         fi
         
-        # 生成Release Notes
+        # 生成 Release Notes 头部
         RELEASE_NOTES="## 🚀 XiBackpack $VERSION\n\n"
         RELEASE_NOTES+="**发布时间**: $(date '+%Y年%m月%d日')\n\n"
         
         if [[ -n "$PREVIOUS_TAG" ]]; then
           RELEASE_NOTES+="**变更范围**: $PREVIOUS_TAG → $TAG_NAME\n\n"
+        else
+          RELEASE_NOTES+="**变更范围**: 初始版本\n\n"
         fi
         
         RELEASE_NOTES+="### 📊 变更统计\n\n"
         RELEASE_NOTES+="- **提交数量**: $COMMIT_COUNT 次\n"
-        RELEASE_NOTES+="- **提交者**: $(echo "$COMMITS" | cut -d'|' -f3 | sort -u | wc -l | tr -d ' ') 人\n\n"
+        # 修复了这里的各种管道命令导致可能的空值报错
+        if [[ -n "$COMMITS" ]]; then
+            AUTHOR_COUNT=$(echo "$COMMITS" | cut -d'|' -f3 | sort -u | wc -l | tr -d ' ')
+        else
+            AUTHOR_COUNT=0
+        fi
+        RELEASE_NOTES+="- **提交者**: $AUTHOR_COUNT 人\n\n"
         
         RELEASE_NOTES+="### 📝 变更内容\n\n"
         
         if [[ -z "$COMMITS" ]]; then
           RELEASE_NOTES+"> ℹ️ 自上次发布以来没有变更\n\n"
         else
-          # 按提交类型分类
+          # 按提交类型分类 (逻辑保持不变)
           FEATURE_COMMITS=$(echo "$COMMITS" | grep -iE "^(feat|feature|add|新增|添加)" || true)
           FIX_COMMITS=$(echo "$COMMITS" | grep -iE "^(fix|bug|修复|修正)" || true)
           DOCS_COMMITS=$(echo "$COMMITS" | grep -iE "^(docs|doc|文档|readme)" || true)
           REFACTOR_COMMITS=$(echo "$COMMITS" | grep -iE "^(refactor|refact|重构|优化)" || true)
+          # 排除上述所有关键词
           OTHER_COMMITS=$(echo "$COMMITS" | grep -vE "^(feat|feature|add|fix|bug|docs|doc|refactor|refact|新增|添加|修复|修正|文档|readme|重构|优化)" || true)
           
-          # 功能新增
+          # 辅助函数：输出列表
+          function print_commits() {
+              while IFS='|' read -r hash message author date; do
+                # 移除可能存在的引号，防止破坏 Markdown
+                clean_msg=$(echo "$message" | sed 's/"//g')
+                echo "- $clean_msg"
+              done <<< "$1"
+          }
+          
           if [[ -n "$FEATURE_COMMITS" ]]; then
             RELEASE_NOTES+="#### ✨ 新功能\n\n"
-            while IFS='|' read -r hash message author date; do
-              RELEASE_NOTES+="- $message\n"
-            done <<< "$FEATURE_COMMITS"
-            RELEASE_NOTES+="\n"
+            # 捕获函数输出并追加
+            OUTPUT=$(print_commits "$FEATURE_COMMITS")
+            RELEASE_NOTES+="$OUTPUT\n\n"
           fi
           
-          # 问题修复
           if [[ -n "$FIX_COMMITS" ]]; then
             RELEASE_NOTES+="#### 🐛 问题修复\n\n"
-            while IFS='|' read -r hash message author date; do
-              RELEASE_NOTES+="- $message\n"
-            done <<< "$FIX_COMMITS"
-            RELEASE_NOTES+="\n"
+            OUTPUT=$(print_commits "$FIX_COMMITS")
+            RELEASE_NOTES+="$OUTPUT\n\n"
           fi
           
-          # 文档更新
           if [[ -n "$DOCS_COMMITS" ]]; then
             RELEASE_NOTES+="#### 📚 文档更新\n\n"
-            while IFS='|' read -r hash message author date; do
-              RELEASE_NOTES+="- $message\n"
-            done <<< "$DOCS_COMMITS"
-            RELEASE_NOTES+="\n"
+            OUTPUT=$(print_commits "$DOCS_COMMITS")
+            RELEASE_NOTES+="$OUTPUT\n\n"
           fi
           
-          # 代码优化
           if [[ -n "$REFACTOR_COMMITS" ]]; then
             RELEASE_NOTES+="#### ⚡ 代码优化\n\n"
-            while IFS='|' read -r hash message author date; do
-              RELEASE_NOTES+="- $message\n"
-            done <<< "$REFACTOR_COMMITS"
-            RELEASE_NOTES+="\n"
+            OUTPUT=$(print_commits "$REFACTOR_COMMITS")
+            RELEASE_NOTES+="$OUTPUT\n\n"
           fi
           
-          # 其他变更
           if [[ -n "$OTHER_COMMITS" ]]; then
             RELEASE_NOTES+="#### 🔧 其他变更\n\n"
-            while IFS='|' read -r hash message author date; do
-              RELEASE_NOTES+="- $message\n"
-            done <<< "$OTHER_COMMITS"
-            RELEASE_NOTES+="\n"
+            OUTPUT=$(print_commits "$OTHER_COMMITS")
+            RELEASE_NOTES+="$OUTPUT\n\n"
           fi
         fi
         
@@ -231,17 +227,24 @@ jobs:
         RELEASE_NOTES+="<summary>📋 详细提交列表</summary>\n\n"
         if [[ -n "$COMMITS" ]]; then
           while IFS='|' read -r hash message author date; do
-            RELEASE_NOTES+="- **$hash** - $message\n"
+            clean_msg=$(echo "$message" | sed 's/"//g')
+            RELEASE_NOTES+="- **$hash** - $clean_msg\n"
             RELEASE_NOTES+="  - 作者: $author\n"
             RELEASE_NOTES+="  - 日期: $date\n\n"
           done <<< "$COMMITS"
         fi
         RELEASE_NOTES+="</details>\n"
         
-        # 设置输出
-        echo "release_notes<<EOF" >> "$GITHUB_OUTPUT"
-        echo "$RELEASE_NOTES" >> "$GITHUB_OUTPUT"
-        echo "EOF" >> "$GITHUB_OUTPUT"
+        # 1. 生成随机定界符（防止内容中包含EOF导致截断）
+        delimiter="$(openssl rand -hex 8)"
+        
+        # 2. 写入 GITHUB_OUTPUT
+        echo "release_notes<<$delimiter" >> "$GITHUB_OUTPUT"
+        
+        # 3. 关键修改：使用 echo -e 强制解析 \n 为换行
+        echo -e "$RELEASE_NOTES" >> "$GITHUB_OUTPUT"
+        
+        echo "$delimiter" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: 获取 JAR 文件名
