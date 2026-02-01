@@ -75,6 +75,7 @@ zh:
   # 数据库相关消息
   database:
     init_success: "&a数据库初始化成功"
+    table_init_success: "&a数据库表初始化成功"
     init_failed: "&c数据库初始化失败: {error}"
     connection_failed: "&c数据库连接失败: {error}"
 
@@ -141,5 +142,6 @@ en:
   # Database related messages
   database:
     init_success: "&aDatabase initialized successfully"
+    table_init_success: "&aDatabase table initialized successfully"
     init_failed: "&cDatabase initialization failed: {error}"
     connection_failed: "&cDatabase connection failed: {error}"

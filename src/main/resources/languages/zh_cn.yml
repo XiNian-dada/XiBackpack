@@ -75,6 +75,7 @@ team-backpack:
 # 数据库相关消息
 database:
   init_success: "&a数据库初始化成功"
+  table_init_success: "&a数据库表初始化成功"
   init_failed: "&c数据库初始化失败: {error}"
   connection_failed: "&c数据库连接失败: {error}"
 
