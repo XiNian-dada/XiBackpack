@@ -116,7 +116,7 @@ public class ConfigManager {
         defaultSuppliers.put("backpack.size", () -> 27);
         defaultSuppliers.put("backpack.cooldown", () -> 1000L);
         defaultSuppliers.put("backpack.backup.max-count", () -> 10);
-        defaultSuppliers.put("language", () -> "zh");
+        defaultSuppliers.put("language", () -> "zh_cn");
         defaultSuppliers.put("debug", () -> false);
     }
 
