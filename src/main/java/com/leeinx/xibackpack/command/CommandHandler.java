@@ -61,7 +61,7 @@ public class CommandHandler implements CommandExecutor {
 
             Player player = (Player) sender;
 
-            if (command.getName().equalsIgnoreCase("xibackpack")) {
+            if (command.getName().equalsIgnoreCase("xibackpack") || command.getName().equalsIgnoreCase("bp")) {
                 // 检查基本权限
                 if (!player.hasPermission("xibackpack.use")) {
                     player.sendMessage("§c您没有权限使用此命令!");
@@ -77,58 +77,72 @@ public class CommandHandler implements CommandExecutor {
                     plugin.getBackpackManager().openBackpack(player);
                     return true;
                 } else if (args.length >= 1) {
-                    if (args[0].equalsIgnoreCase("open")) {
-                        // 打开背包
+                    // 命令别名处理
+                    String cmd = args[0].toLowerCase();
+                    
+                    // 打开背包命令
+                    if (cmd.equals("open") || cmd.equals("o")) {
                         // 检查冷却时间
                         if (!plugin.checkAndApplyCooldown(player)) {
                             return true;
                         }
                         plugin.getBackpackManager().openBackpack(player);
                         return true;
-                    } else if (args[0].equalsIgnoreCase("upgrade")) {
-                        // 升级背包
+                    }
+                    // 升级背包命令
+                    else if (cmd.equals("upgrade") || cmd.equals("up")) {
                         upgradeBackpack(player);
                         return true;
-                    } else if (args[0].equalsIgnoreCase("backup")) {
-                        // 备份背包
-                        if (args.length >= 2 && args[1].equalsIgnoreCase("create")) {
-                            createBackup(player);
-                            return true;
-                        } else if (args.length >= 3 && args[1].equalsIgnoreCase("restore")) {
-                            if (args.length >= 4 && args[2].equalsIgnoreCase("index")) {
-                                // 按索引恢复备份
-                                restoreBackupByIndex(player, args[3]);
-                            } else {
-                                // 按ID恢复备份
-                                restoreBackup(player, args[2]);
+                    }
+                    // 备份背包命令
+                    else if (cmd.equals("backup") || cmd.equals("b")) {
+                        if (args.length >= 2) {
+                            String subCmd = args[1].toLowerCase();
+                            if (subCmd.equals("create") || subCmd.equals("c")) {
+                                createBackup(player);
+                                return true;
+                            } else if (subCmd.equals("restore") || subCmd.equals("r")) {
+                                if (args.length >= 3) {
+                                    if (args.length >= 4 && (args[2].equals("index") || args[2].equals("i"))) {
+                                        // 按索引恢复备份
+                                        restoreBackupByIndex(player, args[3]);
+                                    } else {
+                                        // 按ID恢复备份
+                                        restoreBackup(player, args[2]);
+                                    }
+                                    return true;
+                                }
+                            } else if (subCmd.equals("list") || subCmd.equals("l")) {
+                                // 列出所有备份
+                                listBackups(player);
+                                return true;
                             }
-                            return true;
-                        } else if (args.length >= 2 && args[1].equalsIgnoreCase("list")) {
-                            // 列出所有备份
-                            listBackups(player);
-                            return true;
-                        } else {
-                            showBackupHelp(player);
-                            return true;
                         }
-                    } else if (args[0].equalsIgnoreCase("team")) {
-                        // 团队背包命令
+                        showBackupHelp(player);
+                        return true;
+                    }
+                    // 团队背包命令
+                    else if (cmd.equals("team") || cmd.equals("t")) {
                         handleTeamCommand(player, args);
                         return true;
-                    } else if (args[0].equalsIgnoreCase("teamgui")) {
-                        // 打开团队背包管理界面
+                    }
+                    // 打开团队背包管理界面
+                    else if (cmd.equals("teamgui") || cmd.equals("tg")) {
                         plugin.getTeamBackpackManager().openManagementGUI(player);
                         return true;
-                    } else if (args[0].equalsIgnoreCase("help")) {
-                        // 显示帮助
+                    }
+                    // 显示帮助
+                    else if (cmd.equals("help") || cmd.equals("h")) {
                         showHelp(player);
                         return true;
-                    } else if (args[0].equalsIgnoreCase("reload")) {
-                        // 重新加载配置文件
+                    }
+                    // 重新加载配置文件
+                    else if (cmd.equals("reload") || cmd.equals("rl")) {
                         reloadConfig(player);
                         return true;
-                    } else {
-                        // 未知子命令
+                    }
+                    // 未知子命令
+                    else {
                         player.sendMessage("§c未知的子命令: " + args[0]);
                         showHelp(player);
                         return true;
@@ -788,6 +802,22 @@ public class CommandHandler implements CommandExecutor {
             
             // 重新加载消息配置
             plugin.reloadMessagesConfig();
+            
+            // 重新加载自动备份管理器配置
+            try {
+                // 反射获取自动备份管理器实例
+                java.lang.reflect.Field field = plugin.getClass().getDeclaredField("autoBackupManager");
+                field.setAccessible(true);
+                Object autoBackupManager = field.get(plugin);
+                if (autoBackupManager != null) {
+                    java.lang.reflect.Method reloadMethod = autoBackupManager.getClass().getMethod("reloadConfig");
+                    reloadMethod.invoke(autoBackupManager);
+                    player.sendMessage("§a自动备份配置已重新加载!");
+                }
+            } catch (Exception e) {
+                // 反射失败时忽略，不影响其他配置的重新加载
+                plugin.getLogger().warning("重新加载自动备份配置时出错: " + e.getMessage());
+            }
             
             player.sendMessage("§a配置文件和消息配置已成功重新加载!");
         } catch (Exception e) {

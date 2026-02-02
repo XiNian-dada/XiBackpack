@@ -143,6 +143,9 @@ public final class XiBackpack extends JavaPlugin implements Listener {
     // 添加用于跟踪玩家创建团队背包状态的Map
     private Map<UUID, Boolean> playerCreatingTeamBackpack = new ConcurrentHashMap<>();
     
+    // 自动备份管理器
+    private com.leeinx.xibackpack.util.AutoBackupManager autoBackupManager;
+    
     /**
      * 插件构造函数，用于MockBukkit实例化
      */
@@ -223,12 +226,23 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             return;
         }
 
+        // 初始化自动备份管理器
+        try {
+            autoBackupManager = new com.leeinx.xibackpack.util.AutoBackupManager(this);
+            getLogger().info("自动备份管理器初始化成功");
+        } catch (Exception e) {
+            getLogger().log(Level.SEVERE, "自动备份管理器初始化失败", e);
+        }
+
         // 注册命令和事件监听器
         registerCommands();
         registerEvents();
 
         getLogger().info(getMessage("plugin.enabled"));
         getLogger().info("插件初始化完成，准备就绪");
+        if (autoBackupManager != null && autoBackupManager.isEnabled()) {
+            getLogger().info("自动备份功能已启用，间隔: " + autoBackupManager.getInterval() + "秒");
+        }
     }
     
     /**
@@ -319,6 +333,11 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             Player player = event.getPlayer();
             PlayerBackpack backpack = backpackManager.getBackpack(player);
             backpackManager.saveBackpack(backpack);
+            
+            // 执行自动备份
+            if (autoBackupManager != null) {
+                autoBackupManager.handlePlayerQuit(player);
+            }
             
             // 移除冷却时间记录
             cooldowns.remove(player.getUniqueId());
@@ -509,17 +528,11 @@ public final class XiBackpack extends JavaPlugin implements Listener {
                             return;
                         }
 
-                        // 检查玩家是否有权限修改背包内容（所有成员、背包管理员或全局管理员可以修改）
-                        String backpackName = backpack.getName();
-                        if (backpackName == null) {
-                            backpackName = ""; // 默认空字符串
-                        }
-                        String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
-                        String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+                        // 检查玩家是否有权限修改背包内容（所有成员或全局管理员可以修改）
+                        // 简化权限检查，不再使用动态生成的权限节点
                         if (!backpack.isMember(player.getUniqueId()) && 
-                            !player.hasPermission(backpackAdminPermission) && 
                             !player.hasPermission("xibackpack.admin")) {
-                            // 如果不是成员、背包管理员且不是全局管理员，则禁止修改背包内容
+                            // 如果不是成员且不是全局管理员，则禁止修改背包内容
                             if (event.getRawSlot() < 45) { // 只检查物品区域
                                 event.setCancelled(true);
                                 player.sendMessage("§c您没有权限修改此团队背包的内容！");
@@ -832,6 +845,11 @@ public final class XiBackpack extends JavaPlugin implements Listener {
             } catch (Exception e) {
                 com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("关闭数据库连接", e);
             }
+        }
+        
+        // 关闭自动备份管理器
+        if (autoBackupManager != null) {
+            autoBackupManager.shutdown();
         }
         
         // 关闭日志处理器

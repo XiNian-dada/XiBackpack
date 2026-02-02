@@ -13,12 +13,13 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.*;
-import java.util.concurrent.Callable;
+import java.util.concurrent.*;
 import java.util.logging.Level;
 
 public class DatabaseManager {
     private XiBackpack plugin;
     private HikariDataSource dataSource;
+    private ExecutorService asyncExecutor;
 
     /**
      * 构造函数，初始化数据库管理器
@@ -33,6 +34,27 @@ public class DatabaseManager {
      */
     public void initialize() {
         try {
+            // 初始化异步执行器
+            int corePoolSize = Runtime.getRuntime().availableProcessors();
+            int maxPoolSize = corePoolSize * 2;
+            long keepAliveTime = 60L;
+            asyncExecutor = new ThreadPoolExecutor(
+                corePoolSize,
+                maxPoolSize,
+                keepAliveTime,
+                TimeUnit.SECONDS,
+                new LinkedBlockingQueue<>(1000),
+                new ThreadFactory() {
+                    @Override
+                    public Thread newThread(Runnable r) {
+                        Thread thread = new Thread(r, "XiBackpack-DB-Thread");
+                        thread.setDaemon(true);
+                        return thread;
+                    }
+                },
+                new ThreadPoolExecutor.CallerRunsPolicy()
+            );
+            
             HikariConfig config = new HikariConfig();
 
             // 从配置文件读取数据库配置
@@ -292,6 +314,19 @@ public class DatabaseManager {
             dataSource.close();
             plugin.getLogger().info("数据库连接池已关闭");
         }
+        
+        if (asyncExecutor != null && !asyncExecutor.isShutdown()) {
+            try {
+                asyncExecutor.shutdown();
+                if (!asyncExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    asyncExecutor.shutdownNow();
+                }
+                plugin.getLogger().info("数据库异步执行器已关闭");
+            } catch (InterruptedException e) {
+                asyncExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
     }
     
     /**
@@ -392,6 +427,18 @@ public class DatabaseManager {
             }
         }, "保存玩家背包数据");
     }
+    
+    /**
+     * 异步保存玩家背包数据到数据库
+     * @param playerUUID 玩家UUID
+     * @param backpackData 背包数据（JSON格式）
+     * @return 保存结果的CompletableFuture
+     */
+    public CompletableFuture<Boolean> savePlayerBackpackAsync(UUID playerUUID, String backpackData) {
+        return CompletableFuture.supplyAsync(() -> {
+            return savePlayerBackpack(playerUUID, backpackData);
+        }, asyncExecutor);
+    }
 
     /**
      * 从数据库加载玩家背包数据
@@ -430,6 +477,17 @@ public class DatabaseManager {
                 }
             }
         }, "加载玩家背包数据");
+    }
+    
+    /**
+     * 异步从数据库加载玩家背包数据
+     * @param playerUUID 玩家UUID
+     * @return 背包数据（JSON格式）的CompletableFuture，如果不存在则返回null
+     */
+    public CompletableFuture<String> loadPlayerBackpackAsync(UUID playerUUID) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadPlayerBackpack(playerUUID);
+        }, asyncExecutor);
     }
     
     /**
@@ -501,6 +559,19 @@ public class DatabaseManager {
     }
     
     /**
+     * 异步保存玩家背包备份数据
+     * @param playerUUID 玩家UUID
+     * @param backupId 备份ID
+     * @param backpackData 背包数据（JSON格式）
+     * @return 保存结果的CompletableFuture
+     */
+    public CompletableFuture<Boolean> savePlayerBackpackBackupAsync(UUID playerUUID, String backupId, String backpackData) {
+        return CompletableFuture.supplyAsync(() -> {
+            return savePlayerBackpackBackup(playerUUID, backupId, backpackData);
+        }, asyncExecutor);
+    }
+    
+    /**
      * 从数据库加载玩家背包备份数据
      * @param playerUUID 玩家UUID
      * @param backupId 备份ID
@@ -539,6 +610,18 @@ public class DatabaseManager {
                 }
             }
         }, "加载玩家背包备份数据");
+    }
+    
+    /**
+     * 异步从数据库加载玩家背包备份数据
+     * @param playerUUID 玩家UUID
+     * @param backupId 备份ID
+     * @return 背包数据（JSON格式）的CompletableFuture，如果不存在则返回null
+     */
+    public CompletableFuture<String> loadPlayerBackpackBackupAsync(UUID playerUUID, String backupId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadPlayerBackpackBackup(playerUUID, backupId);
+        }, asyncExecutor);
     }
     
     /**
@@ -662,6 +745,17 @@ public class DatabaseManager {
     }
     
     /**
+     * 异步获取玩家所有备份ID
+     * @param playerUUID 玩家UUID
+     * @return 备份ID列表的CompletableFuture
+     */
+    public CompletableFuture<List<String>> getPlayerBackupIdsAsync(UUID playerUUID) {
+        return CompletableFuture.supplyAsync(() -> {
+            return getPlayerBackupIds(playerUUID);
+        }, asyncExecutor);
+    }
+    
+    /**
      * 保存团队背包数据到数据库
      * @param backpack 团队背包
      * @return 是否保存成功
@@ -725,6 +819,17 @@ public class DatabaseManager {
                 }
             }
         }, "保存团队背包数据");
+    }
+    
+    /**
+     * 异步保存团队背包数据到数据库
+     * @param backpack 团队背包
+     * @return 保存结果的CompletableFuture
+     */
+    public CompletableFuture<Boolean> saveTeamBackpackAsync(TeamBackpack backpack) {
+        return CompletableFuture.supplyAsync(() -> {
+            return saveTeamBackpack(backpack);
+        }, asyncExecutor);
     }
     
     /**
@@ -834,6 +939,17 @@ public class DatabaseManager {
                 }
             }
         }, "加载团队背包数据");
+    }
+    
+    /**
+     * 异步从数据库加载团队背包数据
+     * @param backpackId 背包ID
+     * @return 团队背包实例的CompletableFuture，如果不存在则返回null
+     */
+    public CompletableFuture<TeamBackpack> loadTeamBackpackAsync(String backpackId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadTeamBackpack(backpackId);
+        }, asyncExecutor);
     }
     
     /**

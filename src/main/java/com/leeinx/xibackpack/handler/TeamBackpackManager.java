@@ -14,11 +14,10 @@ import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.*;
 import java.util.logging.Level;
+import java.util.concurrent.CompletableFuture;
 
-public class TeamBackpackManager {
-    private XiBackpack plugin;
+public class TeamBackpackManager extends BaseBackpackManager {
     private Map<String, TeamBackpack> loadedBackpacks;
-    private Map<UUID, Integer> playerPages;
     private Map<UUID, String> playerCurrentBackpack; // 记录玩家当前查看的团队背包ID
     // 记录正在查看特定团队背包的所有玩家
     private Map<String, Set<UUID>> backpackViewers;
@@ -30,13 +29,8 @@ public class TeamBackpackManager {
      * @throws IllegalArgumentException 当plugin为null时抛出
      */
     public TeamBackpackManager(XiBackpack plugin) {
-        if (plugin == null) {
-            throw new IllegalArgumentException("Plugin cannot be null");
-        }
-
-        this.plugin = plugin;
+        super(plugin);
         this.loadedBackpacks = new HashMap<>();
-        this.playerPages = new HashMap<>();
         this.playerCurrentBackpack = new HashMap<>();
         this.backpackViewers = new HashMap<>();
     }
@@ -85,15 +79,9 @@ public class TeamBackpackManager {
                 return false;
             }
 
-            // 检查请求者是否有权限（必须是所有者、背包管理员或全局管理员）
-            String backpackName = backpack.getName();
-            if (backpackName == null) {
-                backpackName = ""; // 默认空字符串
-            }
-            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
-            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            // 检查请求者是否有权限（必须是所有者或全局管理员）
+            // 简化权限检查，不再使用动态生成的权限节点
             if (!backpack.isOwner(requester.getUniqueId()) && 
-                !requester.hasPermission(backpackAdminPermission) && 
                 !requester.hasPermission("xibackpack.admin")) {
                 requester.sendMessage("§c您没有权限添加成员到此团队背包");
                 return false;
@@ -140,15 +128,9 @@ public class TeamBackpackManager {
                 return false;
             }
 
-            // 检查请求者是否有权限（必须是所有者、背包管理员或全局管理员）
-            String backpackName = backpack.getName();
-            if (backpackName == null) {
-                backpackName = ""; // 默认空字符串
-            }
-            String sanitizedName = backpackName.replaceAll("[^a-zA-Z0-9]", "");
-            String backpackAdminPermission = "xibackpack.team." + sanitizedName + ".admin";
+            // 检查请求者是否有权限（必须是所有者或全局管理员）
+            // 简化权限检查，不再使用动态生成的权限节点
             if (!backpack.isOwner(requester.getUniqueId()) && 
-                !requester.hasPermission(backpackAdminPermission) && 
                 !requester.hasPermission("xibackpack.admin")) {
                 requester.sendMessage("§c您没有权限从此团队背包移除成员");
                 return false;
@@ -236,6 +218,16 @@ public class TeamBackpackManager {
     private TeamBackpack loadBackpackFromDatabase(String backpackId) {
         return plugin.getDatabaseManager().loadTeamBackpack(backpackId);
     }
+    
+    /**
+     * 异步从数据库加载背包数据
+     *
+     * @param backpackId 背包ID
+     * @return 团队背包实例的CompletableFuture
+     */
+    private CompletableFuture<TeamBackpack> loadBackpackFromDatabaseAsync(String backpackId) {
+        return plugin.getDatabaseManager().loadTeamBackpackAsync(backpackId);
+    }
 
     /**
      * 保存背包到数据库 (异步 + 线程安全)
@@ -245,45 +237,22 @@ public class TeamBackpackManager {
     public void saveBackpack(TeamBackpack backpack) {
         if (backpack == null) return;
 
-        // ========================================================
-        // 步骤 1: 主线程 "快照" (Snapshot)
-        // 必须在主线程获取所有数据，防止异步运行时数据发生变化
-        // ========================================================
-
-        // 1. 获取不可变的基础信息
-        final String id = backpack.getId();
-        final String name = backpack.getName();
-        final UUID owner = backpack.getOwner();
-
-        // 2. 序列化物品数据 (耗时较少，必须在主线程做以防 HashMap 报错)
-        final String serializedData = backpack.serialize();
-
-        // 3. 克隆成员列表 (防止异步保存时成员列表发生变化)
-        final Set<UUID> membersSnapshot = new HashSet<>(backpack.getMembers());
-
-        // ========================================================
-        // 步骤 2: 异步线程 IO 操作
-        // ========================================================
-        new org.bukkit.scheduler.BukkitRunnable() {
-            @Override
-            public void run() {
-                try {
-                    // 调用 DatabaseManager 中专门为异步保存设计的方法
-                    plugin.getDatabaseManager().saveTeamBackpackData(
-                            id,
-                            name,
-                            owner,
-                            serializedData,
-                            membersSnapshot
-                    );
-
-                    plugin.getLogger().info("团队背包 " + id + " 已异步保存。");
-
-                } catch (Exception e) {
-                    plugin.getLogger().log(Level.SEVERE, "异步保存团队背包失败", e);
-                }
-            }
-        }.runTaskAsynchronously(plugin);
+        // 使用异步数据库操作方法保存背包
+        plugin.getDatabaseManager().saveTeamBackpackAsync(backpack)
+            .thenAcceptAsync(success -> {
+                // 在主线程上执行日志操作
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (success) {
+                        plugin.getLogger().info("团队背包 " + backpack.getId() + " 已异步保存。");
+                    } else {
+                        plugin.getLogger().warning("团队背包 " + backpack.getId() + " 保存失败。");
+                    }
+                });
+            })
+            .exceptionally(ex -> {
+                plugin.getLogger().log(Level.SEVERE, "异步保存团队背包失败", ex);
+                return null;
+            });
     }
 
     /**
@@ -335,44 +304,47 @@ public class TeamBackpackManager {
      * 启动异步团队背包加载流程
      */
     private void startAsyncTeamBackpackLoad(Player player, String backpackId, int page) {
-        openLoadingGui(player); // 先显示加载动画
+        super.openLoadingGui(player); // 先显示加载动画
         player.sendMessage(plugin.getMessage("team-backpack.loading_message", "§d正在加载团队仓库，请稍候..."));
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                // [异步线程] 加载数据 (同步调用数据库管理器，但此Runnable本身是异步运行的)
-                final TeamBackpack backpack = loadBackpackFromDatabase(backpackId);
+        // 使用异步加载方法加载数据
+        loadBackpackFromDatabaseAsync(backpackId)
+            .thenAcceptAsync(backpack -> {
+                if (!player.isOnline()) return;
 
-                // 回到 [主线程] 处理UI
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        if (!player.isOnline()) return;
+                // 在主线程上执行界面操作
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    // 检查玩家当前是否还开着Loading界面 (防止玩家关闭界面后被强行打开)
+                    if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof LoadingHolder)) {
+                        // 如果玩家已经关掉了加载界面，或者打开了其他界面，就不再强制打开背包
+                        return;
+                    }
 
-                        // 检查玩家当前是否还开着Loading界面 (防止玩家关闭界面后被强行打开)
-                        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof LoadingHolder)) {
-                            // 如果玩家已经关掉了加载界面，或者打开了其他界面，就不再强制打开背包
+                    if (backpack != null) {
+                        loadedBackpacks.put(backpackId, backpack);
+                        // 再次检查权限，因为加载过程中权限可能变化
+                        if (!backpack.isMember(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
+                            player.sendMessage(plugin.getMessage("team-backpack.no_permission", "§c您没有权限访问此团队背包"));
+                            player.closeInventory();
                             return;
                         }
-
-                        if (backpack != null) {
-                            loadedBackpacks.put(backpackId, backpack);
-                            // 再次检查权限，因为加载过程中权限可能变化
-                            if (!backpack.isMember(player.getUniqueId()) && !player.hasPermission("xibackpack.admin")) {
-                                player.sendMessage(plugin.getMessage("team-backpack.no_permission", "§c您没有权限访问此团队背包"));
-                                player.closeInventory();
-                                return;
-                            }
-                            openTeamBackpackGuiInternal(player, backpack, page);
-                        } else {
-                            player.sendMessage(plugin.getMessage("team-backpack.load_failed", "§c团队背包不存在或加载失败。"));
-                            player.closeInventory();
-                        }
+                        openTeamBackpackGuiInternal(player, backpack, page);
+                    } else {
+                        player.sendMessage(plugin.getMessage("team-backpack.load_failed", "§c团队背包不存在或加载失败。"));
+                        player.closeInventory();
                     }
-                }.runTask(plugin);
-            }
-        }.runTaskAsynchronously(plugin);
+                });
+            })
+            .exceptionally(ex -> {
+                plugin.getLogger().log(Level.SEVERE, "异步加载团队背包失败", ex);
+                if (player.isOnline()) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        player.sendMessage(plugin.getMessage("team-backpack.load_failed", "§c团队背包不存在或加载失败。"));
+                        player.closeInventory();
+                    });
+                }
+                return null;
+            });
     }
     /**
      * 内部方法：构建并打开真正的团队背包GUI
@@ -403,8 +375,10 @@ public class TeamBackpackManager {
                 }
             }
 
-            addBarrierBlocks(inventory, backpack, startSlot, endSlot);
-            addControlButtons(inventory, page, backpack.getSize());
+            // 使用基类方法添加屏障方块
+            super.addBarrierBlocks(inventory, backpack.getSize(), startSlot, endSlot);
+            // 使用基类方法添加控制按钮
+            super.addControlButtons(inventory, page, backpack.getSize());
 
             player.openInventory(inventory);
         } catch (Exception e) {
@@ -412,23 +386,6 @@ public class TeamBackpackManager {
             player.sendMessage(plugin.getMessage("team-backpack.open_error", "§c打开团队背包页面时发生错误，请联系管理员"));
         }
     }
-    /**
-     * 显示一个加载中动画界面 (团队背包专用)
-     * @param player 玩家对象
-     */
-    private void openLoadingGui(Player player) {
-        Inventory loadingInv = Bukkit.createInventory(new LoadingHolder(), 9, plugin.getMessage("team-backpack.loading_gui_title", "§0团队仓库加载中..."));
-        ItemStack item = new ItemStack(Material.ENDER_CHEST); // 团队背包用末影箱图标
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(plugin.getMessage("team-backpack.loading_item_name", "§d团队数据同步中..."));
-            meta.setLore(Arrays.asList(plugin.getMessage("team-backpack.loading_item_lore_line1", "§7正在从云端拉取共享仓库"), plugin.getMessage("team-backpack.loading_item_lore_line2", "§7请稍候...")));
-            item.setItemMeta(meta);
-        }
-        loadingInv.setItem(4, item);
-        player.openInventory(loadingInv);
-    }
-
     /**
      * 创建背包界面
      * @param backpack 团队背包
@@ -439,101 +396,6 @@ public class TeamBackpackManager {
         String backpackName = backpack.getName() != null ? backpack.getName() : "团队背包";
         return Bukkit.createInventory(new TeamBackpackPageHolder(backpack.getId(), page), 54,
                 "§0团队背包: " + backpackName + " §7(第" + (page + 1) + "页)");
-    }
-
-    private String getLocalizedPageText(int page) {
-        if ("zh".equals(plugin.getLanguage())) {
-            return "第" + (page + 1) + "页";
-        } else {
-            return "Page " + (page + 1);
-        }
-    }
-
-    /**
-     * 在未解锁的槽位中添加屏障方块
-     * @param inventory 背包界面
-     * @param backpack 团队背包
-     * @param startSlot 起始槽位（当前页面的起始位置）
-     * @param endSlot 结束槽位（当前页面的结束位置）
-     */
-    private void addBarrierBlocks(Inventory inventory, TeamBackpack backpack, int startSlot, int endSlot) {
-        int maxAllowedSlot = Math.min(backpack.getSize() - startSlot, 45);
-        for (int i = 0; i < 45; i++) {
-            if (i >= maxAllowedSlot) {
-                ItemStack barrier = new ItemStack(Material.BARRIER);
-                ItemMeta meta = barrier.getItemMeta();
-                if (meta != null) {
-                    meta.setDisplayName(plugin.getMessage("backpack.slot_locked", "§c锁定槽位"));
-                    barrier.setItemMeta(meta);
-                }
-                inventory.setItem(i, barrier);
-            }
-        }
-    }
-
-    /**
-     * 向背包界面添加控制按钮（上一页、下一页等）
-     * @param inventory 背包界面
-     * @param page 当前页面索引
-     * @param backpackSize 背包总大小
-     */
-    private void addControlButtons(Inventory inventory, int page, int backpackSize) {
-        if (inventory == null) {
-            plugin.getLogger().warning("尝试向null背包添加控制按钮");
-            return;
-        }
-
-        try {
-            int totalPages = (int) Math.ceil((double) backpackSize / 45);
-
-            // 上一页按钮（左下角）
-            ItemStack prevButton = new ItemStack(Material.ARROW);
-            ItemMeta prevMeta = prevButton.getItemMeta();
-            if (prevMeta != null) {
-                if (page <= 0) {
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev_first", "§7第一页"));
-                } else {
-                    // 使用 page 而不是 page + 1，因为 message 中的 page 是当前页码
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev",
-                            "page", String.valueOf(page),
-                            "total", String.valueOf(totalPages)));
-                }
-                prevButton.setItemMeta(prevMeta);
-            }
-            inventory.setItem(45, prevButton); // 左下角
-
-            // 下一页按钮（右下角）
-            ItemStack nextButton = new ItemStack(Material.ARROW);
-            ItemMeta nextMeta = nextButton.getItemMeta();
-            if (nextMeta != null) {
-                // 如果已经是最后一页，显示特殊文本
-                if (page >= totalPages - 1) {
-                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_last", "§7最后一页"));
-                } else {
-                    // 使用 page + 2 因为下一页是当前页+1，显示时页码从1开始计数
-                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next",
-                            "page", String.valueOf(page + 2),
-                            "total", String.valueOf(totalPages)));
-                }
-                nextButton.setItemMeta(nextMeta);
-            }
-            inventory.setItem(53, nextButton); // 右下角
-
-            // 显示当前页信息
-            ItemStack infoButton = new ItemStack(Material.PAPER);
-            ItemMeta infoMeta = infoButton.getItemMeta();
-            if (infoMeta != null) {
-                infoMeta.setDisplayName(plugin.getMessage("backpack.info_title", "§e背包信息"));
-                infoMeta.setLore(Arrays.asList(
-                        plugin.getMessage("backpack.info_capacity", "size", String.valueOf(backpackSize)),
-                        getLocalizedCurrentPageText(page + 1) // 显示当前页码 (从1开始)
-                ));
-                infoButton.setItemMeta(infoMeta);
-            }
-            inventory.setItem(49, infoButton); // 中下
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.SEVERE, "添加控制按钮时出错", e);
-        }
     }
 
     private String getLocalizedCurrentPageText(int page) {
@@ -737,7 +599,7 @@ public class TeamBackpackManager {
                         }
                         
                         // 更新屏障方块
-                        addBarrierBlocks(viewerInventory, backpack, viewerPage * 45, Math.min(viewerPage * 45 + 45, backpack.getSize()));
+                        addBarrierBlocks(viewerInventory, backpack.getSize(), viewerPage * 45, Math.min(viewerPage * 45 + 45, backpack.getSize()));
                     } else {
                         // 如果查看者在不同页面，从背包数据重新加载
                         int viewerStartSlot = viewerPage * 45;
@@ -749,7 +611,7 @@ public class TeamBackpackManager {
                         }
                         
                         // 更新屏障方块
-                        addBarrierBlocks(viewerInventory, backpack, viewerStartSlot, viewerEndSlot);
+                        addBarrierBlocks(viewerInventory, backpack.getSize(), viewerStartSlot, viewerEndSlot);
                     }
                 }
             }

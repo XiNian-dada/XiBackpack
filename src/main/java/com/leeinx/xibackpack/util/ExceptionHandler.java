@@ -113,7 +113,7 @@ public class ExceptionHandler {
      * @param e 异常对象
      * @throws IllegalArgumentException 当action为null时抛出
      */
-    public static void handleAsyncException(String action, Exception e) {
+    public static void handleAsyncException(String action, Throwable e) {
         if (action == null || action.isEmpty()) {
             throw new IllegalArgumentException("Action cannot be null or empty");
         }
@@ -154,7 +154,7 @@ public class ExceptionHandler {
      * @param e 异常对象
      * @throws IllegalArgumentException 当action为null时抛出
      */
-    private static void logException(String action, Exception e) {
+    private static void logException(String action, Throwable e) {
         if (action == null || action.isEmpty()) {
             throw new IllegalArgumentException("Action cannot be null or empty");
         }

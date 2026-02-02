@@ -14,15 +14,13 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
 import com.leeinx.xibackpack.main.XiBackpack;
 import com.leeinx.xibackpack.backpack.PlayerBackpack;
 import com.leeinx.xibackpack.holder.LoadingHolder;
 
-public class BackpackManager {
-    private XiBackpack plugin;
+public class BackpackManager extends BaseBackpackManager {
     private Map<UUID, PlayerBackpack> loadedBackpacks;
-    // 存储玩家当前查看的背包页
-    private Map<UUID, Integer> playerPages;
 
     /**
      * 构造函数，初始化背包管理器
@@ -30,41 +28,48 @@ public class BackpackManager {
      * @throws IllegalArgumentException 当plugin为null时抛出
      */
     public BackpackManager(XiBackpack plugin) {
-        if (plugin == null) {
-            throw new IllegalArgumentException("Plugin cannot be null");
-        }
-        this.plugin = plugin;
+        super(plugin);
         this.loadedBackpacks = new ConcurrentHashMap<>();
-        this.playerPages = new ConcurrentHashMap<>();
     }
 
     /**
-     * 获取玩家的背包实例（同步方法）
-     * 注意：此方法用于从缓存中获取背包。如果缓存中没有，它将【同步】从数据库加载。
-     * 优化后的 openBackpack 会预先异步加载，所以正常游戏流程中，此方法应该很少触发阻塞加载。
+     * 获取玩家的背包实例
+     * 注意：此方法首先从缓存中获取背包。如果缓存中没有，会同步加载背包数据。
+     * 正常游戏流程中，背包应该已经通过异步加载预先放入缓存。
      * @param player 玩家对象
-     * @return 玩家的背包实例
-     * @throws IllegalArgumentException 当player为null时抛出
+     * @return 玩家的背包实例，永远不会返回null
      */
     public PlayerBackpack getBackpack(Player player) {
         if (player == null) {
             com.leeinx.xibackpack.util.LogManager.warning("尝试获取null玩家的背包");
-            return null; // 或者抛出 IllegalArgumentException
+            return new PlayerBackpack(UUID.randomUUID(), plugin.getConfig().getInt("backpack.size", 27));
         }
 
         UUID playerUUID = player.getUniqueId();
-        if (!loadedBackpacks.containsKey(playerUUID)) {
-            // 作为兜底方案，如果缓存中没有，仍然需要同步加载。
-            // 但在优化后的打开流程中，这一步应该由异步加载完成。
-            com.leeinx.xibackpack.util.LogManager.info("同步加载玩家 %s 的背包 (缓存未命中)", player.getName());
-            PlayerBackpack backpack = loadBackpackDataSynchronously(playerUUID);
-            if (backpack != null) {
-                loadedBackpacks.put(playerUUID, backpack);
-            }
-            return backpack;
+        PlayerBackpack backpack = loadedBackpacks.get(playerUUID);
+        
+        // 如果缓存中没有背包，同步加载
+        if (backpack == null) {
+            backpack = loadBackpackData(playerUUID);
+            loadedBackpacks.put(playerUUID, backpack);
         }
-
-        return loadedBackpacks.get(playerUUID);
+        
+        return backpack;
+    }
+    
+    /**
+     * 异步加载玩家背包数据并放入缓存
+     * @param playerUUID 玩家唯一标识符
+     * @return 玩家背包实例的CompletableFuture
+     */
+    public CompletableFuture<PlayerBackpack> loadAndCacheBackpackAsync(UUID playerUUID) {
+        return loadBackpackDataAsync(playerUUID)
+            .thenApply(backpack -> {
+                if (backpack != null) {
+                    loadedBackpacks.put(playerUUID, backpack);
+                }
+                return backpack;
+            });
     }
 
     /**
@@ -98,39 +103,33 @@ public class BackpackManager {
         openLoadingGui(player);
         player.sendMessage(plugin.getMessage("backpack.loading_message", "§e正在加载您的个人背包，请稍候..."));
 
-        // 3. 开启异步任务去加载数据
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                // [异步线程] 读取数据库（同步调用数据库管理器，但此Runnable本身是异步运行的）
-                final PlayerBackpack backpack = loadBackpackDataSynchronously(uuid);
+        // 3. 使用异步加载方法加载数据
+        loadAndCacheBackpackAsync(uuid)
+            .thenAcceptAsync(backpack -> {
+                // 玩家可能在加载过程中下线了
+                if (!player.isOnline()) return;
 
-                // 回到 [主线程] 处理UI
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        // 玩家可能在加载过程中下线了
-                        if (!player.isOnline()) return;
-
-                        // 验证玩家当前是否还开着Loading界面 (防止玩家关闭界面后被强行打开)
-                        if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof LoadingHolder)) {
-                            // 如果玩家已经关掉了加载界面，或者打开了其他界面，就不再强制打开背包
-                            return;
-                        }
-
-                        if (backpack != null) {
-                            // 存入缓存
-                            loadedBackpacks.put(uuid, backpack);
-                            // 打开真正的背包
-                            openBackpackGuiInternal(player, backpack, page);
-                        } else {
-                            player.sendMessage(plugin.getMessage("backpack.load_failed", "§c加载个人背包数据失败，请联系管理员。"));
-                            player.closeInventory();
-                        }
+                // 在主线程上执行界面操作
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    // 验证玩家当前是否还开着Loading界面 (防止玩家关闭界面后被强行打开)
+                    if (!(player.getOpenInventory().getTopInventory().getHolder() instanceof LoadingHolder)) {
+                        // 如果玩家已经关掉了加载界面，或者打开了其他界面，就不再强制打开背包
+                        return;
                     }
-                }.runTask(plugin);
-            }
-        }.runTaskAsynchronously(plugin);
+
+                    if (backpack != null) {
+                        // 打开真正的背包
+                        openBackpackGuiInternal(player, backpack, page);
+                    } else {
+                        player.sendMessage(plugin.getMessage("backpack.load_failed", "§c加载个人背包数据失败，请联系管理员。"));
+                        player.closeInventory();
+                    }
+                });
+            })
+            .exceptionally(ex -> {
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("异步加载个人背包", ex);
+                return null;
+            });
     }
 
     /**
@@ -169,26 +168,6 @@ public class BackpackManager {
     }
 
     /**
-     * 显示一个加载中动画界面
-     * @param player 玩家对象
-     */
-    private void openLoadingGui(Player player) {
-        // 创建一个小的界面，显示加载中图标
-        Inventory loadingInv = Bukkit.createInventory(new LoadingHolder(), 9, plugin.getMessage("backpack.loading_gui_title", "§0正在加载数据..."));
-
-        // 制作一个简单的加载动画项
-        ItemStack item = new ItemStack(Material.CLOCK); // 或者其他你喜欢的图标，如 COMPASS, PAPER
-        ItemMeta meta = item.getItemMeta();
-        if (meta != null) {
-            meta.setDisplayName(plugin.getMessage("backpack.loading_item_name", "§e数据加载中..."));
-            meta.setLore(Collections.singletonList(plugin.getMessage("backpack.loading_item_lore", "§7请稍候，正在同步数据库...")));
-            item.setItemMeta(meta);
-        }
-        loadingInv.setItem(4, item); // 放在中间
-        player.openInventory(loadingInv);
-    }
-
-    /**
      * 在未解锁的槽位中添加屏障方块
      * @param inventory 背包界面
      * @param backpack 玩家背包
@@ -196,33 +175,16 @@ public class BackpackManager {
      * @param endSlot 结束槽位（当前页面的结束位置）
      */
     private void addBarrierBlocks(Inventory inventory, PlayerBackpack backpack, int startSlot, int endSlot) {
-        // 计算当前页面中已解锁的最大槽位（相对于当前页面）
-        int maxAllowedSlot = Math.min(backpack.getSize() - startSlot, 45); // 当前页面最大可用槽位数
-
-        // 为未解锁的槽位添加屏障方块
-        for (int i = 0; i < 45; i++) {
-            // 检查是否是已解锁的槽位
-            if (i >= maxAllowedSlot) {
-                // 未解锁的槽位用屏障方块填充
-                ItemStack barrier = new ItemStack(Material.BARRIER);
-                ItemMeta meta = barrier.getItemMeta();
-                if (meta != null) {
-                    // 修复屏障方块显示名称问题
-                    meta.setDisplayName(plugin.getMessage("backpack.slot_locked", "§c锁定槽位"));
-                    barrier.setItemMeta(meta);
-                }
-                inventory.setItem(i, barrier);
-            }
-        }
+        // 使用基类方法
+        super.addBarrierBlocks(inventory, backpack.getSize(), startSlot, endSlot);
     }
 
     /**
-     * 同步从数据库加载玩家背包数据
-     * 注意：此方法是【同步阻塞】的，只应在异步线程中调用，或作为极少数情况下的兜底方案。
+     * 从数据库加载玩家背包数据（支持异步）
      * @param playerUUID 玩家唯一标识符
      * @return 玩家背包实例
      */
-    private PlayerBackpack loadBackpackDataSynchronously(UUID playerUUID) {
+    private PlayerBackpack loadBackpackData(UUID playerUUID) {
         if (playerUUID == null) {
             plugin.getLogger().warning("尝试加载null UUID的背包数据");
             return new PlayerBackpack(UUID.randomUUID(), plugin.getConfig().getInt("backpack.size", 27));
@@ -244,6 +206,32 @@ public class BackpackManager {
         int defaultSize = plugin.getConfig().getInt("backpack.size", 27);
         return new PlayerBackpack(playerUUID, defaultSize);
     }
+    
+    /**
+     * 异步从数据库加载玩家背包数据
+     * @param playerUUID 玩家唯一标识符
+     * @return 玩家背包实例的CompletableFuture
+     */
+    private CompletableFuture<PlayerBackpack> loadBackpackDataAsync(UUID playerUUID) {
+        return plugin.getDatabaseManager().loadPlayerBackpackAsync(playerUUID)
+            .thenApply(backpackData -> {
+                if (backpackData != null) {
+                    try {
+                        return PlayerBackpack.deserialize(backpackData, playerUUID);
+                    } catch (Exception e) {
+                        plugin.getLogger().log(Level.SEVERE, "反序列化个人背包数据时出错: " + playerUUID, e);
+                    }
+                }
+                // 默认背包大小从配置文件读取
+                int defaultSize = plugin.getConfig().getInt("backpack.size", 27);
+                return new PlayerBackpack(playerUUID, defaultSize);
+            })
+            .exceptionally(e -> {
+                plugin.getLogger().log(Level.SEVERE, "从数据库加载个人背包数据时出错: " + playerUUID, e);
+                int defaultSize = plugin.getConfig().getInt("backpack.size", 27);
+                return new PlayerBackpack(playerUUID, defaultSize);
+            });
+    }
 
     /**
      * 创建背包界面
@@ -256,94 +244,7 @@ public class BackpackManager {
                 plugin.getMessage("backpack.name") + " §7(第" + (page + 1) + "页)");
     }
 
-    /**
-     * 获取本地化页面文本
-     * @param page 页面索引
-     * @return 本地化后的页面文本
-     */
-    private String getLocalizedPageText(int page) {
-        if ("zh".equals(plugin.getLanguage())) {
-            return "第" + (page + 1) + "页";
-        } else {
-            return "Page " + (page + 1);
-        }
-    }
 
-    /**
-     * 向背包界面添加控制按钮（上一页、下一页等）
-     * @param inventory 背包界面
-     * @param page 当前页面索引
-     * @param backpackSize 背包总大小
-     */
-    private void addControlButtons(Inventory inventory, int page, int backpackSize) {
-        if (inventory == null) {
-            com.leeinx.xibackpack.util.LogManager.warning("尝试向null背包添加控制按钮");
-            return;
-        }
-
-        try {
-            int totalPages = (int) Math.ceil((double) backpackSize / 45);
-
-            // 上一页按钮（左下角）
-            ItemStack prevButton = new ItemStack(Material.ARROW);
-            ItemMeta prevMeta = prevButton.getItemMeta();
-            if (prevMeta != null) {
-                if (page <= 0) {
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev_first", "§7第一页"));
-                } else {
-                    prevMeta.setDisplayName(plugin.getMessage("backpack.page_prev",
-                            "page", String.valueOf(page),
-                            "total", String.valueOf(totalPages)));
-                }
-                prevButton.setItemMeta(prevMeta);
-            }
-            inventory.setItem(45, prevButton); // 左下角
-
-            // 下一页按钮（右下角）
-            ItemStack nextButton = new ItemStack(Material.ARROW);
-            ItemMeta nextMeta = nextButton.getItemMeta();
-            if (nextMeta != null) {
-                // 修复下一页按钮显示，正确显示当前页和总页数
-                if (page >= totalPages - 1) {
-                    // 如果已经是最后一页，显示特殊文本
-                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next_last", "§7最后一页"));
-                } else {
-                    nextMeta.setDisplayName(plugin.getMessage("backpack.page_next",
-                            "page", String.valueOf(page + 2),
-                            "total", String.valueOf(totalPages)));
-                }
-                nextButton.setItemMeta(nextMeta);
-            }
-            inventory.setItem(53, nextButton); // 右下角
-
-            // 填充按钮
-            ItemStack fillButton = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
-            ItemMeta fillMeta = fillButton.getItemMeta();
-            if(fillMeta != null){
-                fillMeta.setDisplayName(plugin.getMessage("backpack.fill_button", " "));
-                fillMeta.addEnchant(Enchantment.LUCK, 1, false);
-                fillButton.setItemMeta(fillMeta);
-            }
-            for(int index = 46; index < 53; index++){
-                inventory.setItem(index, fillButton);
-            }
-
-            // 显示当前页信息
-            ItemStack infoButton = new ItemStack(Material.PAPER);
-            ItemMeta infoMeta = infoButton.getItemMeta();
-            if (infoMeta != null) {
-                infoMeta.setDisplayName(plugin.getMessage("backpack.info_title", "§e背包信息"));
-                infoMeta.setLore(java.util.Arrays.asList(
-                        plugin.getMessage("backpack.info_capacity", "size", String.valueOf(backpackSize)),
-                        getLocalizedCurrentPageText(page + 1)
-                ));
-                infoButton.setItemMeta(infoMeta);
-            }
-            inventory.setItem(49, infoButton); // 中下
-        } catch (Exception e) {
-            com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("添加控制按钮", e);
-        }
-    }
     
     private String getLocalizedCurrentPageText(int page) {
         if ("zh".equals(plugin.getLanguage())) {
@@ -368,22 +269,20 @@ public class BackpackManager {
         final String serializedData = backpack.serialize();
         final UUID uuid = backpack.getPlayerUUID();
 
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                try {
-                    if (!plugin.isEnabled()) return;
-
-                    boolean success = plugin.getDatabaseManager().savePlayerBackpack(uuid, serializedData);
+        plugin.getDatabaseManager().savePlayerBackpackAsync(uuid, serializedData)
+            .thenAcceptAsync(success -> {
+                // 在主线程上执行插件操作
+                Bukkit.getScheduler().runTask(plugin, () -> {
                     plugin.incrementDatabaseOperations();
                     if (!success) {
                         com.leeinx.xibackpack.util.LogManager.warning("保存玩家 %s 的背包数据失败", uuid);
                     }
-                } catch (Exception e) {
-                    com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("异步保存个人背包数据", e);
-                }
-            }
-        }.runTaskAsynchronously(plugin);
+                });
+            })
+            .exceptionally(ex -> {
+                com.leeinx.xibackpack.util.ExceptionHandler.handleAsyncException("异步保存个人背包数据", ex);
+                return null;
+            });
     }
 
     /**
