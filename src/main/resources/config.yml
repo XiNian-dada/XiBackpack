@@ -13,11 +13,11 @@ database:
   username: "" # SQLite 忽略此配置
   password: "" # SQLite 忽略此配置
   # 连接池配置
-  max-pool-size: 5
-  min-idle: 1
-  connection-timeout: 5000
-  idle-timeout: 300000
-  max-lifetime: 600000
+  max-pool-size: 15
+  min-idle: 5
+  connection-timeout: 10000
+  idle-timeout: 900000
+  max-lifetime: 2400000
   # 重试机制配置
   retry:
     max-attempts: 2

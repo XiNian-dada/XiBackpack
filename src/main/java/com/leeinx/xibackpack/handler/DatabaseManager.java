@@ -101,11 +101,21 @@ public class DatabaseManager {
 
             // 连接池配置（非SQLite）
             if (!dbType.equalsIgnoreCase("sqlite")) {
-                config.setMaximumPoolSize(com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10));
-                config.setMinimumIdle(com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2));
+                int dbMaxPoolSize = com.leeinx.xibackpack.util.ConfigManager.getInt("database.max-pool-size", 10);
+                int minIdle = com.leeinx.xibackpack.util.ConfigManager.getInt("database.min-idle", 2);
+                long idleTimeout = isTestEnvironment ? 300000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000);
+                long maxLifetime = isTestEnvironment ? 600000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000);
+                
+                config.setMaximumPoolSize(dbMaxPoolSize);
+                config.setMinimumIdle(minIdle);
                 config.setConnectionTimeout(connectionTimeout);
-                config.setIdleTimeout(isTestEnvironment ? 300000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.idle-timeout", 600000));
-                config.setMaxLifetime(isTestEnvironment ? 600000 : com.leeinx.xibackpack.util.ConfigManager.getLong("database.max-lifetime", 1800000));
+                config.setIdleTimeout(idleTimeout);
+                config.setMaxLifetime(maxLifetime);
+                
+                // 记录连接池配置
+                if (!isTestEnvironment) {
+                    plugin.getLogger().info("数据库连接池配置: max-pool-size=" + dbMaxPoolSize + ", min-idle=" + minIdle + ", connection-timeout=" + connectionTimeout + ", idle-timeout=" + idleTimeout + ", max-lifetime=" + maxLifetime);
+                }
             }
 
             // MySQL 特定配置

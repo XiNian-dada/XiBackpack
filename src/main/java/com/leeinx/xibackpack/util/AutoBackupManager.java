@@ -153,7 +153,13 @@ public class AutoBackupManager {
      */
     public void handlePlayerQuit(Player player) {
         if (enabled && onQuitTrigger) {
-            createBackupForPlayer(player);
+            // 异步执行备份操作，避免阻塞主线程和连接竞争
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    createBackupForPlayer(player);
+                }
+            }.runTaskAsynchronously(plugin);
         }
     }
 

@@ -74,6 +74,9 @@ public abstract class BaseBackpackManager {
         int nextPageSlot = 53; // 右下角
         int prevPageSlot = 45; // 左下角
 
+        // 添加装饰按钮到最后一行的空白位置
+        addDecorationButtons(inventory);
+
         // 添加下一页按钮
         if (page < totalPages - 1) {
             ItemStack nextPageItem = new ItemStack(Material.ARROW);
@@ -105,6 +108,31 @@ public abstract class BaseBackpackManager {
             pageInfoItem.setItemMeta(meta);
         }
         inventory.setItem(49, pageInfoItem); // 中间位置
+    }
+
+    /**
+     * 向背包界面最后一行添加装饰按钮作为占位符
+     * @param inventory 背包界面
+     */
+    private void addDecorationButtons(Inventory inventory) {
+        // 最后一行的槽位范围：45-53
+        int[] decorationSlots = {
+            46, 47, 48, // 左侧空白
+            50, 51, 52  // 右侧空白
+        };
+
+        // 创建装饰按钮
+        ItemStack decorationItem = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
+        ItemMeta meta = decorationItem.getItemMeta();
+        if (meta != null) {
+            meta.setDisplayName(" "); // 空名称，使其看起来更整洁
+            decorationItem.setItemMeta(meta);
+        }
+
+        // 填充装饰按钮
+        for (int slot : decorationSlots) {
+            inventory.setItem(slot, decorationItem);
+        }
     }
 
     /**

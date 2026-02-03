@@ -612,6 +612,18 @@ public class CommandHandler implements CommandExecutor {
                 player.sendMessage("§c移除成员失败，请检查背包ID是否正确且您是否有权限!");
             }
             return;
+        } else if (args[1].equalsIgnoreCase("open")) {
+            // 打开指定的团队背包
+            if (args.length < 3) {
+                player.sendMessage("§c用法: /xibackpack team open <背包ID>");
+                return;
+            }
+            
+            String backpackId = args[2];
+            
+            // 打开团队背包
+            plugin.getTeamBackpackManager().openBackpack(player, backpackId);
+            return;
         } else if (args[1].equalsIgnoreCase("list")) {
             // 列出玩家可以访问的所有团队背包
             plugin.getTeamBackpackManager().openManagementGUI(player);
