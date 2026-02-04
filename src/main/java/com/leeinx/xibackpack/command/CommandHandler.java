@@ -99,9 +99,19 @@ public class CommandHandler implements CommandExecutor {
                         if (args.length >= 2) {
                             String subCmd = args[1].toLowerCase();
                             if (subCmd.equals("create") || subCmd.equals("c")) {
+                                // 创建备份需要管理员权限
+                                if (!player.hasPermission("xibackpack.admin") && !player.isOp()) {
+                                    player.sendMessage(plugin.getMessage("backpack.no_permission", "§c你没有权限执行此操作！"));
+                                    return true;
+                                }
                                 createBackup(player);
                                 return true;
                             } else if (subCmd.equals("restore") || subCmd.equals("r")) {
+                                // 恢复操作需要管理员权限
+                                if (!player.hasPermission("xibackpack.admin") && !player.isOp()) {
+                                    player.sendMessage(plugin.getMessage("backpack.no_permission", "§c你没有权限执行此操作！"));
+                                    return true;
+                                }
                                 if (args.length >= 3) {
                                     if (args.length >= 4 && (args[2].equals("index") || args[2].equals("i"))) {
                                         // 按索引恢复备份
@@ -113,6 +123,11 @@ public class CommandHandler implements CommandExecutor {
                                     return true;
                                 }
                             } else if (subCmd.equals("list") || subCmd.equals("l")) {
+                                // 列出备份需要管理员权限
+                                if (!player.hasPermission("xibackpack.admin") && !player.isOp()) {
+                                    player.sendMessage(plugin.getMessage("backpack.no_permission", "§c你没有权限执行此操作！"));
+                                    return true;
+                                }
                                 // 列出所有备份
                                 listBackups(player);
                                 return true;
