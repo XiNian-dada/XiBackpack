@@ -524,14 +524,14 @@ public class DatabaseManager {
                     maxBackupCount = 10; // 设置默认值
                 }
                 
-                // 检查备份数量限制
-                int currentBackupCount = getBackupCount(playerUUID);
+                // 检查备份数量限制（使用现有连接）
+                int currentBackupCount = getBackupCount(connection, playerUUID);
                 if (currentBackupCount >= maxBackupCount) {
                     // 计算需要删除的备份数量
                     int backupsToDelete = currentBackupCount - maxBackupCount + 1;
-                    // 删除最旧的备份
+                    // 删除最旧的备份（使用现有连接）
                     for (int i = 0; i < backupsToDelete; i++) {
-                        deleteOldestBackup(playerUUID);
+                        deleteOldestBackup(connection, playerUUID);
                     }
                 }
                 
@@ -566,6 +566,76 @@ public class DatabaseManager {
                 }
             }
         }, "保存玩家背包备份数据");
+    }
+    
+    /**
+     * 获取玩家备份数量（使用现有连接）
+     * @param connection 数据库连接
+     * @param playerUUID 玩家UUID
+     * @return 备份数量
+     */
+    private int getBackupCount(Connection connection, UUID playerUUID) {
+        if (playerUUID == null || connection == null) {
+            return 0;
+        }
+        
+        try {
+            String sql = "SELECT COUNT(*) as count FROM player_backpack_backups WHERE player_uuid = ?";
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, playerUUID.toString());
+                
+                try (ResultSet rs = stmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getInt("count");
+                    }
+                }
+            }
+            return 0;
+        } catch (SQLException e) {
+            com.leeinx.xibackpack.util.LogManager.warning("获取玩家备份数量时出错: %s", e.getMessage());
+            return 0;
+        }
+    }
+    
+    /**
+     * 删除最旧的备份（使用现有连接）
+     * @param connection 数据库连接
+     * @param playerUUID 玩家UUID
+     * @return 是否删除成功
+     */
+    private boolean deleteOldestBackup(Connection connection, UUID playerUUID) {
+        if (playerUUID == null || connection == null) {
+            return false;
+        }
+        
+        try {
+            // 获取数据库类型
+            String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
+            boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
+            
+            String sql;
+            if (isSQLite) {
+                // SQLite使用LIMIT
+                sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at ASC LIMIT 1";
+            } else {
+                // 其他数据库使用子查询
+                sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? AND (player_uuid, created_at) IN " +
+                      "(SELECT player_uuid, MIN(created_at) FROM player_backpack_backups WHERE player_uuid = ? GROUP BY player_uuid)";
+            }
+            
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                stmt.setString(1, playerUUID.toString());
+                if (!isSQLite) {
+                    stmt.setString(2, playerUUID.toString());
+                }
+                int affectedRows = stmt.executeUpdate();
+                return affectedRows > 0;
+            }
+        } catch (SQLException e) {
+            com.leeinx.xibackpack.util.LogManager.warning("删除最旧备份时出错: %s", e.getMessage());
+            return false;
+        }
     }
     
     /**
