@@ -614,23 +614,42 @@ public class DatabaseManager {
             String dbType = com.leeinx.xibackpack.util.ConfigManager.getString("database.type");
             boolean isSQLite = dbType.equalsIgnoreCase("sqlite");
             
-            String sql;
             if (isSQLite) {
-                // SQLite使用LIMIT
-                sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at ASC LIMIT 1";
+                // SQLite不支持DELETE语句中的ORDER BY和LIMIT组合
+                // 先查询最旧的备份ID
+                String selectSql = "SELECT id FROM player_backpack_backups WHERE player_uuid = ? ORDER BY created_at ASC LIMIT 1";
+                Integer oldestBackupId = null;
+                
+                try (PreparedStatement selectStmt = connection.prepareStatement(selectSql)) {
+                    selectStmt.setString(1, playerUUID.toString());
+                    try (ResultSet rs = selectStmt.executeQuery()) {
+                        if (rs.next()) {
+                            oldestBackupId = rs.getInt("id");
+                        }
+                    }
+                }
+                
+                // 如果找到最旧的备份，则删除它
+                if (oldestBackupId != null) {
+                    String deleteSql = "DELETE FROM player_backpack_backups WHERE id = ?";
+                    try (PreparedStatement deleteStmt = connection.prepareStatement(deleteSql)) {
+                        deleteStmt.setInt(1, oldestBackupId);
+                        int affectedRows = deleteStmt.executeUpdate();
+                        return affectedRows > 0;
+                    }
+                }
+                return false;
             } else {
                 // 其他数据库使用子查询
-                sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? AND (player_uuid, created_at) IN " +
-                      "(SELECT player_uuid, MIN(created_at) FROM player_backpack_backups WHERE player_uuid = ? GROUP BY player_uuid)";
-            }
-            
-            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-                stmt.setString(1, playerUUID.toString());
-                if (!isSQLite) {
+                String sql = "DELETE FROM player_backpack_backups WHERE player_uuid = ? AND (player_uuid, created_at) IN " +
+                              "(SELECT player_uuid, MIN(created_at) FROM player_backpack_backups WHERE player_uuid = ? GROUP BY player_uuid)";
+                
+                try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                    stmt.setString(1, playerUUID.toString());
                     stmt.setString(2, playerUUID.toString());
+                    int affectedRows = stmt.executeUpdate();
+                    return affectedRows > 0;
                 }
-                int affectedRows = stmt.executeUpdate();
-                return affectedRows > 0;
             }
         } catch (SQLException e) {
             com.leeinx.xibackpack.util.LogManager.warning("删除最旧备份时出错: %s", e.getMessage());

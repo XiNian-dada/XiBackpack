@@ -154,10 +154,12 @@ public class PlayerBackpack {
         backpackData.put("size", size);
         backpackData.put("items", serializedItems);
         
-        // 记录序列化数据
+        // 记录序列化数据（仅在DEBUG模式下）
         Gson gson = new Gson();
         String jsonData = gson.toJson(backpackData);
-        XiBackpack.getInstance().getLogger().info("Serialized backpack data: " + jsonData);
+        if (XiBackpack.getInstance().getConfig().getBoolean("debug.enabled", false)) {
+            XiBackpack.getInstance().getLogger().info("Serialized backpack data: " + jsonData);
+        }
 
         return jsonData;
     }
